@@ -200,7 +200,7 @@ void setup() {
 }
 
 void presentation() {
-	sendSketchInfo("nRF24_Doctor_N250", "1.1");
+	sendSketchInfo(F("nRF24_Doctor_N250"), F("1.1"));
 	present(CHILD_ID_COUNTER, S_CUSTOM) ;  // "CUSTOM" counter
 }
 
@@ -244,14 +244,14 @@ void loop() {
 			else{							//Mode: Sleep
 				transportDisable();
 				SleepCurrent_uA = uAperBit1*GetAvgADCBits(iNrCurrentMeasurements);
-				Sprint("uAperBit1:");Sprintln(SleepCurrent_uA);
+				Sprint(F("uAperBit1:"));Sprintln(SleepCurrent_uA);
 				if (SleepCurrent_uA < 10000){
 					//Set Higher Sensitivity: uAperBit2
 					digitalWrite(MOSFET_2P2OHM_PIN,LOW);
 					digitalWrite(MOSFET_100OHM_PIN,HIGH);
 					delay(10);		//Gate charge time and settle time, don't use wait as it will prevent the radio from sleep
 					SleepCurrent_uA = uAperBit2*GetAvgADCBits(iNrCurrentMeasurements);
-					Sprint("uAperBit2:");Sprintln(SleepCurrent_uA);
+					Sprint(F("uAperBit2:"));Sprintln(SleepCurrent_uA);
 				}
 				if (SleepCurrent_uA < 100){
 					//Set Higher Sensitivity: uAperBit3
@@ -259,7 +259,7 @@ void loop() {
 					digitalWrite(MOSFET_100OHM_PIN,LOW);
 					delay(10);		//Gate charge time and settle time, don't use wait as it will prevent the radio from sleep
 					SleepCurrent_uA = uAperBit3*GetAvgADCBits(iNrCurrentMeasurements);
-					Sprint("uAperBit3:");Sprintln(SleepCurrent_uA);
+					Sprint(F("uAperBit3:"));Sprintln(SleepCurrent_uA);
 				}
 				//Restore standby power state
 				digitalWrite(MOSFET_2P2OHM_PIN,HIGH);	//Enable 2.2Ohm
@@ -400,9 +400,9 @@ void loadNewRadioSettings() {
 	
 	//lcd.home();
 	lcd.setCursor(0, 0);
-	lcd.print("nRF24 DOCTOR");
+	lcd.print(F("nRF24 DOCTOR"));
 	lcd.setCursor(0, 1);
-	lcd.print("Connecting...");
+	lcd.print(F("Connecting..."));
 	transportWaitUntilReady(10000);		// Give it 10[s] to connect, else continue to allow user to set new connection settings
 }
 
@@ -733,8 +733,8 @@ void LCD_local_display(void) {
 			else{
 				fCurrent_uA = SleepCurrent_uA;	
 			}
-			Sprint("iPowerMode:");Sprintln(iPowerMode);
-			Sprint("fCurrent_uA:");Sprintln(fCurrent_uA);
+			Sprint(F("iPowerMode:"));Sprintln(iPowerMode);
+			Sprint(F("fCurrent_uA:"));Sprintln(fCurrent_uA);
 			
 			if (fCurrent_uA > 1000){
 				int Current_mA = (int)(fCurrent_uA/1000);
