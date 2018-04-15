@@ -200,7 +200,7 @@ void setup() {
 }
 
 void presentation() {
-	sendSketchInfo("nRF24_Doctor_N250", "1.1");
+	sendSketchInfo(F("nRF24_Doctor_N250"), F("1.1"));
 	present(CHILD_ID_COUNTER, S_CUSTOM) ;  // "CUSTOM" counter
 }
 
@@ -244,14 +244,14 @@ void loop() {
 			else{							//Mode: Sleep
 				transportDisable();
 				SleepCurrent_uA = uAperBit1*GetAvgADCBits(iNrCurrentMeasurements);
-				Sprint("uAperBit1:");Sprintln(SleepCurrent_uA);
+				Sprint(F("uAperBit1:"));Sprintln(SleepCurrent_uA);
 				if (SleepCurrent_uA < 10000){
 					//Set Higher Sensitivity: uAperBit2
 					digitalWrite(MOSFET_2P2OHM_PIN,LOW);
 					digitalWrite(MOSFET_100OHM_PIN,HIGH);
 					delay(10);		//Gate charge time and settle time, don't use wait as it will prevent the radio from sleep
 					SleepCurrent_uA = uAperBit2*GetAvgADCBits(iNrCurrentMeasurements);
-					Sprint("uAperBit2:");Sprintln(SleepCurrent_uA);
+					Sprint(F("uAperBit2:"));Sprintln(SleepCurrent_uA);
 				}
 				if (SleepCurrent_uA < 100){
 					//Set Higher Sensitivity: uAperBit3
@@ -259,7 +259,7 @@ void loop() {
 					digitalWrite(MOSFET_100OHM_PIN,LOW);
 					delay(10);		//Gate charge time and settle time, don't use wait as it will prevent the radio from sleep
 					SleepCurrent_uA = uAperBit3*GetAvgADCBits(iNrCurrentMeasurements);
-					Sprint("uAperBit3:");Sprintln(SleepCurrent_uA);
+					Sprint(F("uAperBit3:"));Sprintln(SleepCurrent_uA);
 				}
 				//Restore standby power state
 				digitalWrite(MOSFET_2P2OHM_PIN,HIGH);	//Enable 2.2Ohm
@@ -400,9 +400,9 @@ void loadNewRadioSettings() {
 	
 	//lcd.home();
 	lcd.setCursor(0, 0);
-	lcd.print("nRF24 DOCTOR");
+	lcd.print(F("nRF24 DOCTOR"));
 	lcd.setCursor(0, 1);
-	lcd.print("Connecting...");
+	lcd.print(F("Connecting..."));
 	transportWaitUntilReady(10000);		// Give it 10[s] to connect, else continue to allow user to set new connection settings
 }
 
@@ -692,35 +692,35 @@ void LCD_local_display(void) {
 	switch (opState) {
 		case STATE_RUN:
 		{
-			snprintf(buf, sizeof buf, "P%-3dFAIL%4d%3d%%", MY_PARENT_NODE_ID, iNrFailedMessages, GetNrOfTrueValuesInArray(bArrayFailedMessages, iMaxNumberOfMessages));
+			snprintf_P(buf, sizeof buf, PSTR("P%-3dFAIL%4d%3d%%"), MY_PARENT_NODE_ID, iNrFailedMessages, GetNrOfTrueValuesInArray(bArrayFailedMessages, iMaxNumberOfMessages));
 			print_LCD_line(buf,1, 1);
-			snprintf(buf, sizeof buf, "D%-3dNACK%4d%3d%%", iDestinationNode , iNrNAckMessages, GetNrOfTrueValuesInArray(bArrayNAckMessages, iMaxNumberOfMessages));
+			snprintf_P(buf, sizeof buf, PSTR("D%-3dNACK%4d%3d%%"), iDestinationNode , iNrNAckMessages, GetNrOfTrueValuesInArray(bArrayNAckMessages, iMaxNumberOfMessages));
 			print_LCD_line(buf,2, 1);
 			break;
 		}
 		case STATE_RUN2:
 		{
 			if (iMaxDelayFirstHop_ms>9999){
-				snprintf(buf, sizeof buf, "HOP1 dTmax   INF");
+				snprintf_P(buf, sizeof buf, PSTR("HOP1 dTmax   INF"));
 			}
 			else{
-				snprintf(buf, sizeof buf, "HOP1 dTmax%4dms",iMaxDelayFirstHop_ms);
+				snprintf_P(buf, sizeof buf, PSTR("HOP1 dTmax%4dms"),iMaxDelayFirstHop_ms);
 			}
 			print_LCD_line(buf,1, 1);
 			if (iMaxDelayDestination_ms>9999){
-				snprintf(buf, sizeof buf, "D%-3d dTmax   INF",iDestinationNode,iMaxDelayDestination_ms);
+				snprintf_P(buf, sizeof buf, PSTR("D%-3d dTmax   INF"),iDestinationNode,iMaxDelayDestination_ms);
 			}
 			else{
-				snprintf(buf, sizeof buf, "D%-3d dTmax%4dms",iDestinationNode,iMaxDelayDestination_ms);
+				snprintf_P(buf, sizeof buf, PSTR("D%-3d dTmax%4dms"),iDestinationNode,iMaxDelayDestination_ms);
 			}
 			print_LCD_line(buf,2, 1);
 			break;
 		}
 		case STATE_RUN3:
 		{
-			snprintf(buf, sizeof buf, "MESSAGE COUNT:  ");
+			snprintf_P(buf, sizeof buf, PSTR("MESSAGE COUNT:  "));
 			print_LCD_line(buf,1, 1);
-			snprintf(buf, sizeof buf, "           %5d",iMessageCounter);
+			snprintf_P(buf, sizeof buf, PSTR("           %5d"),iMessageCounter);
 			print_LCD_line(buf,2, 1);
 			break;
 		}		
@@ -733,33 +733,33 @@ void LCD_local_display(void) {
 			else{
 				fCurrent_uA = SleepCurrent_uA;	
 			}
-			Sprint("iPowerMode:");Sprintln(iPowerMode);
-			Sprint("fCurrent_uA:");Sprintln(fCurrent_uA);
+			Sprint(F("iPowerMode:"));Sprintln(iPowerMode);
+			Sprint(F("fCurrent_uA:"));Sprintln(fCurrent_uA);
 			
 			if (fCurrent_uA > 1000){
 				int Current_mA = (int)(fCurrent_uA/1000);
 				if (Current_mA>=300){
-					snprintf(buf, sizeof buf, "%s[mA]= ERR",pcPowerModeNames[iPowerMode],Current_mA);
+					snprintf_P(buf, sizeof buf, PSTR("%s[mA]= ERR"),pcPowerModeNames[iPowerMode],Current_mA);
 				}
 				else if (Current_mA>=100){
-					snprintf(buf, sizeof buf, "%s[mA]=%4d",pcPowerModeNames[iPowerMode],Current_mA);
+					snprintf_P(buf, sizeof buf, PSTR("%s[mA]=%4d"),pcPowerModeNames[iPowerMode],Current_mA);
 				}
 				else if (Current_mA>=10){
 					int iDecCurrent = (int)(((fCurrent_uA/1000)-(float)Current_mA)*10+0.5);if (iDecCurrent>=10){iDecCurrent=iDecCurrent-10;Current_mA +=1;}
-					snprintf(buf, sizeof buf, "%s[mA]=%2d.%1d",pcPowerModeNames[iPowerMode],Current_mA,iDecCurrent);
+					snprintf_P(buf, sizeof buf, PSTR("%s[mA]=%2d.%1d"),pcPowerModeNames[iPowerMode],Current_mA,iDecCurrent);
 				}
 				else {				
 					int iDecCurrent = (int)(((fCurrent_uA/1000)-(float)Current_mA)*100+0.5);if (iDecCurrent >=100){iDecCurrent=iDecCurrent-100;Current_mA +=1;}
-					snprintf(buf, sizeof buf, "%s[mA]=%1d.%2d",pcPowerModeNames[iPowerMode],Current_mA,iDecCurrent);
+					snprintf_P(buf, sizeof buf, PSTR("%s[mA]=%1d.%2d"),pcPowerModeNames[iPowerMode],Current_mA,iDecCurrent);
 				}
 			}
 			else if (fCurrent_uA < 100){		
 				int iCurrent_uA = (int)fCurrent_uA;
 				int iDecCurrent_uA = (int)((fCurrent_uA-(float)iCurrent_uA)*10+0.5); if (iDecCurrent_uA >= 10){iDecCurrent_uA=iDecCurrent_uA-10;iCurrent_uA +=1;}
-					snprintf(buf, sizeof buf, "%s[uA]=%2d.%1d",pcPowerModeNames[iPowerMode],iCurrent_uA,iDecCurrent_uA);
+					snprintf_P(buf, sizeof buf, PSTR("%s[uA]=%2d.%1d"),pcPowerModeNames[iPowerMode],iCurrent_uA,iDecCurrent_uA);
 				}
 			else{
-				snprintf(buf, sizeof buf, "%s[uA]=%4d",pcPowerModeNames[iPowerMode],(int)fCurrent_uA);
+				snprintf_P(buf, sizeof buf, PSTR("%s[uA]=%4d"),pcPowerModeNames[iPowerMode],(int)fCurrent_uA);
 			}
 			if (iPowerMode == 1){
 				print_LCD_line(buf,1, 1);				
@@ -771,7 +771,7 @@ void LCD_local_display(void) {
 		}
 		case STATE_SET_RESET:
 		{
-			snprintf(buf, sizeof buf, "RESET BUFFERS?");
+			snprintf_P(buf, sizeof buf, PSTR("RESET BUFFERS?"));
 			print_LCD_line(buf,1, 1);
 			break;
 		}	
@@ -780,11 +780,11 @@ void LCD_local_display(void) {
 			if(opState==prevOpState){
 				char buf2[4];
 				lcd.setCursor(13, 0);
-				snprintf(buf2, sizeof buf2, "%3d", iDestinationNode);
+				snprintf_P(buf2, sizeof buf2, PSTR("%3d"), iDestinationNode);
 				lcd.print(buf2);
 			}
 			else{
-				snprintf(buf, sizeof buf, "DEST. NODE = %3d", iDestinationNode);
+				snprintf_P(buf, sizeof buf, PSTR("DEST. NODE = %3d"), iDestinationNode);
 				print_LCD_line(buf,1, 1);
 			}
 			break;
@@ -794,11 +794,11 @@ void LCD_local_display(void) {
 			if(opState==prevOpState){
 				char buf2[4];
 				lcd.setCursor(13, 0);
-				snprintf(buf2, sizeof buf2, "%3d", iRf24Channel);
+				snprintf_P(buf2, sizeof buf2, PSTR("%3d"), iRf24Channel);
 				lcd.print(buf2);
 			}
 			else{
-				snprintf(buf, sizeof buf, "CHANNEL NR = %3d", iRf24Channel);
+				snprintf_P(buf, sizeof buf, PSTR("CHANNEL NR = %3d"), iRf24Channel);
 				print_LCD_line(buf,1, 1);
 			}
 			break;
@@ -806,48 +806,48 @@ void LCD_local_display(void) {
 		case STATE_SET_PALEVEL:
 		{
 			lcd.clear();
-			snprintf(buf, sizeof buf, "NODE");
+			snprintf_P(buf, sizeof buf, PSTR("NODE"));
 			print_LCD_line(buf,1, 1);
-			snprintf(buf, sizeof buf, "PA Level = %s", pcPaLevelNames[iRf24PaLevel]);
+			snprintf_P(buf, sizeof buf, PSTR("PA Level = %s"), pcPaLevelNames[iRf24PaLevel]);
 			print_LCD_line(buf,2, 1);
 			break;
 		}
 		case STATE_SET_PALEVEL_GW:
 		{
 			lcd.clear();
-			snprintf(buf, sizeof buf, "GATEWAY");
+			snprintf_P(buf, sizeof buf, PSTR("GATEWAY"));
 			print_LCD_line(buf,1, 1);
-			snprintf(buf, sizeof buf, "PA Level = %s", pcPaLevelNames[iRf24PaLevelGw]);
+			snprintf_P(buf, sizeof buf, PSTR("PA Level = %s"), pcPaLevelNames[iRf24PaLevelGw]);
 			print_LCD_line(buf,2, 1);
 			break;
 		}
 		case STATE_SET_DATARATE:
 		{
 			lcd.clear();
-			snprintf(buf, sizeof buf, "DataRate=%s", pcDataRateNames[iRf24DataRate]);
+			snprintf_P(buf, sizeof buf, PSTR("DataRate=%s"), pcDataRateNames[iRf24DataRate]);
 			print_LCD_line(buf,1, 1);
 			break;
 		}
 		case STATE_SET_BASE_RADIO_ID:
 		{
 			lcd.clear();
-			snprintf(buf, sizeof buf, "Base Radio ID=  ");
+			snprintf_P(buf, sizeof buf, PSTR("Base Radio ID=  "));
 			print_LCD_line(buf,1, 1);
-			snprintf(buf, sizeof buf, "%02X:%0.2X:%0.2X:%0.2X:%0.2X",RF24_BASE_ID_VAR[0],RF24_BASE_ID_VAR[1],RF24_BASE_ID_VAR[2],RF24_BASE_ID_VAR[3],RF24_BASE_ID_VAR[4]);
+			snprintf_P(buf, sizeof buf, PSTR("%02X:%0.2X:%0.2X:%0.2X:%0.2X"),RF24_BASE_ID_VAR[0],RF24_BASE_ID_VAR[1],RF24_BASE_ID_VAR[2],RF24_BASE_ID_VAR[3],RF24_BASE_ID_VAR[4]);
 			print_LCD_line(buf,2, 1);
 			break;
 		}		
 		case STATE_ASK_GATEWAY:
 		{
 			lcd.clear();
-			snprintf(buf, sizeof buf, "UPDATE GATEWAY?:");
+			snprintf_P(buf, sizeof buf, PSTR("UPDATE GATEWAY?:"));
 			print_LCD_line(buf,1, 1);
 			if (bUpdateGateway){
-				snprintf(buf, sizeof buf, "YES");
+				snprintf_P(buf, sizeof buf, PSTR("YES"));
 				print_LCD_line(buf,2, 14);
 			}
 			else{
-				snprintf(buf, sizeof buf, "NO");
+				snprintf_P(buf, sizeof buf, PSTR("NO"));
 				print_LCD_line(buf,2, 15);
 			}
 			break;
@@ -855,9 +855,9 @@ void LCD_local_display(void) {
 		case STATE_UPDATE_GATEWAY:
 		{
 			lcd.clear();
-			snprintf(buf, sizeof buf, "FAILED GATEWAY!");
+			snprintf_P(buf, sizeof buf, PSTR("FAILED GATEWAY!"));
 			print_LCD_line(buf,1, 1);
-			snprintf(buf, sizeof buf,"%s",pcGatewayRetryNames[iRetryGateway]);
+			snprintf_P(buf, sizeof buf, PSTR("%s"),pcGatewayRetryNames[iRetryGateway]);
 			print_LCD_line(buf,2, 1);
 			break;								
 		}	
