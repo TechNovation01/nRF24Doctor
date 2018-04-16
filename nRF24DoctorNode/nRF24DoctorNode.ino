@@ -36,6 +36,7 @@
 //**** MySensors *****
 //#define MY_DEBUG							// Enable debug prints to serial monitor
 //#define MY_DEBUG_VERBOSE_RF24				// debug nrf24
+#define MY_SPLASH_SCREEN_DISABLED			// Disable splash screen (saves some flash)
 #define MY_TRANSPORT_WAIT_READY_MS 10 		// [ms] Init timeout for gateway not reachable
 #define MY_NODE_ID 250						// Set a high node ID, which typically will not yet be used in the network
 #define MY_PARENT_NODE_IS_STATIC			// Fixed parent Node ID, else MySensors Transport will attempt automatic fix after successive failures...but we don't want that while diagnosing our connection
