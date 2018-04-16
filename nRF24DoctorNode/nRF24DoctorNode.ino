@@ -70,15 +70,13 @@
 	//LiquidCrystal_I2C lcd(0x27, 16, 2);  								// Set the LCD I2C address
 	LiquidCrystal lcd(8, 7, 6, 5, 4, 3); 								// LCD with parallel interface
 #else
-	// Color definitions
-	#define BLACK           (0x0000)
+	// Color definitions. BLACK & WHITE are defined in library.
 	#define BLUE            (0x001F)
 	#define RED             (0xF800)
 	#define GREEN           (0x07E0)
 	#define CYAN            (0x07FF)
 	#define MAGENTA         (0xF81F)
 	#define YELLOW          (0xFFE0) 
-	#define WHITE           (0xFFFF)
 
 	#define COLOR_BG        (BLACK)
 	#define COLOR_TEXT      (WHITE) 
@@ -345,7 +343,7 @@ void receive(const MyMessage &message) {
 		
 		//Check Message (Round trip) Delay
 		uint8_t iIndexInTimeArray = IndexOfValueInArray(iNewMessage, iMessageIndexBuffer, iNrTimeDelays); //Look-up if message is present in MessageIndexBuffer for delay calculation
-		if ((iIndexInTimeArray >=0) && iIndexInTimeArray <=iNrTimeDelays){
+		if ((iIndexInTimeArray != 255) && iIndexInTimeArray <=iNrTimeDelays){
 			lTimeDelayBuffer_Destination_us[iIndexInTimeArray] = micros()-lTimeOfTransmit_us[iIndexInTimeArray];
 		}
 		iNrNAckMessages--;	//Received an Acknowledge Message (so one less No Ack)
@@ -656,6 +654,8 @@ void onButton2Hold() {	//Scroll through numbers quickly
 		case STATE_SET_DESTINATION_NODE:
 			iDestinationNode++;
 			bDspRefresh = true;
+			break;
+		default:
 			break;
 	}		
 }
