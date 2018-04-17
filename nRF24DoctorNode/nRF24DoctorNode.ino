@@ -20,7 +20,9 @@
 #define MOSFET_2P2OHM_PIN A2
 #define MOSFET_100OHM_PIN A3
 #define CURRENT_PIN A5
-#define TRIGGER_PIN A4			//Debugging purposes with scope
+#define adcPin 5  				// A5, Match to CURRENT_PIN for configuring registers ADC
+#define INTERRUPT_CE_PIN 2		// Used as hardware trigger to start transmit current measurement
+#define TRIGGER_PIN A4			// Debugging purposes with scope
 
 //**** DEBUG *****
 #define LOCAL_DEBUG
@@ -90,7 +92,7 @@ uint16_t iNrNAckMessages = 0;              							// total of Not Acknowledged M
 uint16_t iMessageCounter = 0;
 
 //**** LCD MENU Constants&Variables ****
-enum mode {STATE_RUN, STATE_RUN2, STATE_RUN3, STATE_CURLEVEL, STATE_SET_RESET, STATE_SET_DESTINATION_NODE, STATE_SET_CHANNEL, STATE_SET_BASE_RADIO_ID, STATE_SET_PALEVEL, STATE_SET_PALEVEL_GW, STATE_SET_DATARATE, STATE_ASK_GATEWAY, STATE_UPDATE_GATEWAY };
+enum mode {STATE_RUN, STATE_RUN2, STATE_RUN3, STATE_CURLEVEL_ACTIVE,STATE_CURLEVEL_SLEEP, STATE_SET_RESET, STATE_SET_DESTINATION_NODE, STATE_SET_CHANNEL, STATE_SET_BASE_RADIO_ID, STATE_SET_PALEVEL, STATE_SET_PALEVEL_GW, STATE_SET_DATARATE, STATE_ASK_GATEWAY, STATE_UPDATE_GATEWAY };
 mode opState = STATE_RUN;											// Default Mode
 boolean bDspRefresh = true;
 
@@ -128,16 +130,23 @@ uint16_t iMeanDelayDestination_ms = 0;
 uint16_t iMaxDelayDestination_ms = 0;
 
 //**** Current Measurement ****
-const uint8_t iNrCurrentMeasurements 	= 255;	//Nr of measurements for averaging
-uint8_t iPowerMode 		= 0;
-const uint8_t iNrPowerModes = 2;
-const char *pcPowerModeNames[iNrPowerModes] = { "SLEEP", "STANDBY" };
+const uint8_t iNrCurrentMeasurements 	= 60;	//Nr of measurements for averaging current. <64 to prevent risk of overflow of iAdcSum
+const uint8_t iNrPowerModes = 3;
+const char *pcPowerModeNames[iNrPowerModes] = { "SLEEP", "TX", "RX" };
 
-const float uAperBit1 	= 473.1889;	//uAperBit = ((Vref/1024)/R1)*1e6 = ((1.1/1024)/2.2)*1e6				
-const float uAperBit2	= 10.41016;	//uAperBit = ((Vref/1024)/R2)*1e6 = ((1.1/1024)/100)*1e6
-const float uAperBit3 	= 0.105047;	//uAperBit = ((Vref/1024)/R3)*1e6 = ((1.1/1024)/10000)*1e6
-float SleepCurrent_uA 	= 0;
-float StandbyCurrent_uA = 0;
+const float uAperBit1 		= 473.1889;	//uAperBit = ((Vref/1024)/R1)*1e6 = ((1.1/1024)/2.2)*1e6				
+const float uAperBit2		= 10.41016;	//uAperBit = ((Vref/1024)/R2)*1e6 = ((1.1/1024)/100)*1e6
+const float uAperBit3 		= 0.105047;	//uAperBit = ((Vref/1024)/R3)*1e6 = ((1.1/1024)/10000)*1e6
+float SleepCurrent_uA 	 	= 0;
+float TransmitCurrent_uA 	= 0;
+float ReceiveCurrent_uA  	= 0;
+
+//**** Configure ADC ****
+volatile uint8_t iStartStorageAfterNrAdcSamples  = 7; 	//Note this depends on the set ADC prescaler (currently: 16x prescaler)
+volatile uint8_t iStopStorageAfterNrAdcSamples 	= 28; 	//Note this depends on the set ADC prescaler (currently: 16x prescaler)
+volatile uint16_t iAdcSum;								//Limit the number of samples to < 2^6 = 64
+volatile uint8_t iNrAdcSamplesElapsed;
+volatile boolean bAdcDone;
 
 //**** Remote Gateway Update ****
 uint8_t iRetryGateway 	= 0;
@@ -145,6 +154,53 @@ bool bUpdateGateway 	= 0;
 bool bAckGatewayUpdate 	= 0;
 const uint8_t iNrGatwayRetryOptions = 3;
 const char *pcGatewayRetryNames[iNrGatwayRetryOptions] 		= { "SKIP GATEWAY", "RETRY GATEWAY" , "CANCEL ALL"};
+
+
+
+/*****************************************************************************/
+/******************************** ADC INTERRUPT ******************************/
+/*****************************************************************************/
+// ADC complete ISR
+ISR (ADC_vect){
+	//Continuous sampling of ADC
+	iNrAdcSamplesElapsed++;	
+	if (iNrAdcSamplesElapsed >= iStartStorageAfterNrAdcSamples){	//Skip first 130us for TX settling according to datasheet
+		digitalWrite(TRIGGER_PIN,HIGH);				//Debugging purposes with scope
+		iAdcSum = iAdcSum + ADC;
+		if (iNrAdcSamplesElapsed < iStopStorageAfterNrAdcSamples){
+			ADCSRA |= bit (ADSC) | bit (ADIE);	  	// start new conversion and enable interrupt flag on completion
+		}
+		else{
+			bAdcDone = true;
+			digitalWrite(TRIGGER_PIN,LOW);			//Debugging purposes with scope
+		}
+	}
+	else{
+		ADCSRA |= bit (ADSC) | bit (ADIE);	  		// start new conversion and enable interrupt flag on completion
+	}
+}
+
+void ISR_TransmitTriggerADC(){
+	detachInterrupt(digitalPinToInterrupt(2));
+	//Settings for TX - Transmit measurement
+	iStartStorageAfterNrAdcSamples  = 7; 	//Note this depends on the set ADC prescaler (currently: 16x prescaler) + Matched to TX timing
+	switch (iRf24DataRate){
+		case 0:
+			iStopStorageAfterNrAdcSamples 	= 12; 	//Note this depends on the set ADC prescaler (currently: 16x prescaler)	+ Matched to TX timing		
+			break;
+		case 1:
+			iStopStorageAfterNrAdcSamples 	= 10; 	//Note this depends on the set ADC prescaler (currently: 16x prescaler)	+ Matched to TX timing
+			break;
+		case 2:
+			iStopStorageAfterNrAdcSamples 	= 28; 	//Note this depends on the set ADC prescaler (currently: 16x prescaler)	+ Matched to TX timing		
+			break;
+	}
+	
+	iNrAdcSamplesElapsed	= 0;
+	iAdcSum 				= 0;
+	bAdcDone 				= false;
+	ADCSRA |= bit (ADSC) | bit (ADIE);	  	//start new ADC conversion
+}
 
 
 /*****************************************************************************/
@@ -155,9 +211,14 @@ void before() {						//Initialization before the MySensors library starts up
 	pinMode(TRIGGER_PIN, OUTPUT);
 	pinMode(MOSFET_2P2OHM_PIN,OUTPUT);
 	pinMode(MOSFET_100OHM_PIN,OUTPUT);
+	pinMode(INTERRUPT_CE_PIN,INPUT);
 	digitalWrite(MOSFET_2P2OHM_PIN,HIGH);
 	digitalWrite(TRIGGER_PIN,LOW);
-	analogReference(INTERNAL);
+	
+	//**** ADC SETUP ****
+	ADCSRA =  bit (ADEN);                      				// turn ADC on
+  	ADCSRA |= bit (ADPS2);                               	// Prescaler of 16: To get sufficient samples in Tx Current Measurement 
+  	ADMUX  =  bit (REFS0) | bit (REFS1) | (adcPin & 0x07);  // ARef internal and select input port
 
 	//****  LCD *****
 	//  Wire.begin();  // I2C
@@ -216,61 +277,68 @@ void loop() {
 	if (bDspRefresh) LCD_local_display();	
 	
 	/************ PROCESS DIFFERENT OPERATIONAL STATES ************/
-	// RUN, RUN2,RUN3: Are all similar with respect to processing, but show different results on the LCD
 	static unsigned long lLastTransmit = 0;
 	switch (opState) {
-		case STATE_RUN: case STATE_RUN2: case STATE_RUN3:{
-			// Transmit Message
-			transmit();	
-			lLastTransmit = micros();			
+		case STATE_RUN: case STATE_RUN2: case STATE_RUN3: case STATE_CURLEVEL_ACTIVE: case STATE_CURLEVEL_SLEEP:{
+			//Transmit Current Measurement
+			EIFR |= 0x01;					//Clear interrupt flag to prevent an immediate trigger
+			attachInterrupt(digitalPinToInterrupt(2), ISR_TransmitTriggerADC, RISING);
+			boolean bSuccessfulTransmit = transmit();
+			lLastTransmit = micros();
+			
+			for (int n=1;n<100;n++){
+				wait(1);		//Allow for a fast return of the Acknowledge
+				ButtonTick();	//Check for button changes....we must keep responsive
+			}
 
+			//Calculate Mean and Max Delays
 			getMeanAndMaxFromArray(&iMeanDelayFirstHop_ms,&iMaxDelayFirstHop_ms,lTimeDelayBuffer_FirstHop_us,iNrTimeDelays);
 			getMeanAndMaxFromArray(&iMeanDelayDestination_ms,&iMaxDelayDestination_ms,lTimeDelayBuffer_Destination_us,iNrTimeDelays);
 
-			bDspRefresh = true;
-			break;
-		}
-		case STATE_CURLEVEL:{
-			//First round: Measure "iNrCurrentMeasurements" the Current and average in "Standby Mode", then do the same for "Sleep mode"			
-			iPowerMode = !iPowerMode;			//Toggle between modes: "Standby" & "Sleep"
-			if (iPowerMode == 1){				//Mode: Standby
-				transmit();
-				lLastTransmit = micros();
-				wait(50);
-				digitalWrite(TRIGGER_PIN,HIGH);		//Debugging purposes with scope
-				StandbyCurrent_uA = uAperBit1*GetAvgADCBits(iNrCurrentMeasurements);
-				digitalWrite(TRIGGER_PIN,LOW);		//Debugging purposes with scope
+			//Did we have a correct transmit? => Only then check the TX&RX currents.
+			if (bSuccessfulTransmit){
+				while (!bAdcDone){wait(1);};	//Check that all ADC conversions have completed
+				TransmitCurrent_uA = uAperBit1*((float)iAdcSum/(float)(iStopStorageAfterNrAdcSamples-iStartStorageAfterNrAdcSamples+1));
+				
+				//Receive Current Measurement
+				ReceiveCurrent_uA = uAperBit1*GetAvgADCBits(iNrCurrentMeasurements);
+				Sprint(F("TransmitCurrent_uA:"));Sprintln(TransmitCurrent_uA);
+				Sprint(F("ReceiveCurrent_uA:"));Sprintln(ReceiveCurrent_uA);
 			}
-			else{							//Mode: Sleep
-				transportDisable();
-				SleepCurrent_uA = uAperBit1*GetAvgADCBits(iNrCurrentMeasurements);
-				Sprint(F("uAperBit1:"));Sprintln(SleepCurrent_uA);
-				if (SleepCurrent_uA < 10000){
-					//Set Higher Sensitivity: uAperBit2
-					digitalWrite(MOSFET_2P2OHM_PIN,LOW);
-					digitalWrite(MOSFET_100OHM_PIN,HIGH);
-					delay(10);		//Gate charge time and settle time, don't use wait as it will prevent the radio from sleep
-					SleepCurrent_uA = uAperBit2*GetAvgADCBits(iNrCurrentMeasurements);
-					Sprint(F("uAperBit2:"));Sprintln(SleepCurrent_uA);
-				}
-				if (SleepCurrent_uA < 100){
-					//Set Higher Sensitivity: uAperBit3
-					digitalWrite(MOSFET_2P2OHM_PIN,LOW);
-					digitalWrite(MOSFET_100OHM_PIN,LOW);
-					delay(10);		//Gate charge time and settle time, don't use wait as it will prevent the radio from sleep
-					SleepCurrent_uA = uAperBit3*GetAvgADCBits(iNrCurrentMeasurements);
-					Sprint(F("uAperBit3:"));Sprintln(SleepCurrent_uA);
-				}
-				//Restore standby power state
-				digitalWrite(MOSFET_2P2OHM_PIN,HIGH);	//Enable 2.2Ohm
+			else{ //Current Measurement
+				TransmitCurrent_uA = 10000000;	//Will show ERR on display
+				ReceiveCurrent_uA =  10000000;	//Will show ERR on display
+			}
+
+			//Sleep Current Measurement
+			transportDisable();
+			delay(10);									//Gate charge time and settle time, don't use wait as it will prevent the radio from sleep
+			SleepCurrent_uA = uAperBit1*GetAvgADCBits(iNrCurrentMeasurements);
+			if (SleepCurrent_uA < 10000){
+				//Set Higher Sensitivity: uAperBit2
+				digitalWrite(MOSFET_2P2OHM_PIN,LOW);
+				digitalWrite(MOSFET_100OHM_PIN,HIGH);
+				delay(10);								//settle time
+				SleepCurrent_uA = uAperBit2*GetAvgADCBits(iNrCurrentMeasurements);
+			}
+			if (SleepCurrent_uA < 100){
+				//Set Higher Sensitivity: uAperBit3
+				digitalWrite(MOSFET_2P2OHM_PIN,LOW);
 				digitalWrite(MOSFET_100OHM_PIN,LOW);
-				transportStandBy();transmit();
-				lLastTransmit = micros();
+				delay(10);								//settle time
+				SleepCurrent_uA = uAperBit3*GetAvgADCBits(iNrCurrentMeasurements);
 			}
+			Sprint(F("SleepCurrent_uA:"));Sprintln(SleepCurrent_uA);
+			
+			//Restore standby power state
+			digitalWrite(MOSFET_2P2OHM_PIN,HIGH);	//Enable 2.2Ohm
+			digitalWrite(MOSFET_100OHM_PIN,LOW);
+			transportStandBy();
+
 			bDspRefresh = true;
 			break;
 		}		
-		default:{
+		default:{	//Fast LCD update loop for settings without measurements displayed
 			lLastTransmit = micros()-DELAY_BETWEEN_MESSAGES_MICROS;
 			wait(25); // To limit LCD update rate
 			break;
@@ -307,7 +375,7 @@ void receive(const MyMessage &message) {
 	}
 }
 
-void transmit() {
+boolean transmit() {
 	static int iIndexInArrayFailedMessages  = 0 ;
 	static int iIndexInArrayTimeMessages  = 0 ;	
 
@@ -333,8 +401,10 @@ void transmit() {
 	}
 	else{
 		lTimeDelayBuffer_FirstHop_us[iIndexInArrayTimeMessages] = micros() - lTimeOfTransmit_us[iIndexInArrayTimeMessages];	//Log First Hop Delay in buffer
+		unsigned long temptime = lTimeDelayBuffer_FirstHop_us[iIndexInArrayTimeMessages];
 		bArrayFailedMessages[iIndexInArrayFailedMessages] = false;	//Log it as a not-failed = succesful message (for rolling average)
 	}
+	return success;
 }
 
 /********************************************************************************/
@@ -345,40 +415,9 @@ void loadNewRadioSettings() {
 	uint8_t iTempVar0 = RF24_BASE_ID_VAR[0];
 	uint8_t rfsetup = ( ((iRf24DataRate & 0b10 ) << 4) | ((iRf24DataRate & 0b01 ) << 3) | (iRf24PaLevel << 1) ) + 1;		//!< RF24_RF_SETUP, +1 for Si24R1 and LNA
 
-	
-	/*
-	///ADDED
-	// CRC and power up
-	RF24_setRFConfiguration(RF24_CONFIGURATION | _BV(RF24_PWR_UP)) ;
-	// settle >2ms
-	delay(5);
-	// set address width
-	RF24_setAddressWidth(MY_RF24_ADDR_WIDTH);
-	// auto retransmit delay 1500us, auto retransmit count 15
-	RF24_setRetries(RF24_SET_ARD, RF24_SET_ARC);
-	///ADD STOP
-	*/	
 	RF24_setChannel(iRf24Channel);
 	RF24_setRFSetup(rfsetup);
 	RF24_enableFeatures();
-	/*
-	//ADDED
-		// enable ACK payload and dynamic payload
-	RF24_setFeature(RF24_FEATURE);
-	// sanity check (this function is P/non-P independent)
-	if (!RF24_sanityCheck()) {
-		RF24_DEBUG(PSTR("!RF24:INIT:SANCHK FAIL\n")); // sanity check failed, check wiring or replace module
-		return false;
-	}
-	// enable broadcasting pipe
-	RF24_setPipe(_BV(RF24_ERX_P0 + RF24_BROADCAST_PIPE));
-	// disable AA on all pipes, activate when node pipe set
-	RF24_setAutoACK(0x00);
-	// enable dynamic payloads on used pipes
-	RF24_setDynamicPayload(_BV(RF24_DPL_P0 + RF24_BROADCAST_PIPE) | _BV(RF24_DPL_P0));
-	// listen to broadcast pipe
-	//ADDED STOP
-	*/
 	
 	RF24_BASE_ID_VAR[0] = RF24_BROADCAST_ADDRESS;
 	RF24_setPipeAddress(RF24_REG_RX_ADDR_P0 + RF24_BROADCAST_PIPE, (uint8_t*)&RF24_BASE_ID_VAR,
@@ -386,19 +425,8 @@ void loadNewRadioSettings() {
 	RF24_setPipeAddress(RF24_REG_RX_ADDR_P0, (uint8_t*)&RF24_BASE_ID_VAR, MY_RF24_ADDR_WIDTH);
 	RF24_setPipeAddress(RF24_REG_TX_ADDR, (uint8_t*)&RF24_BASE_ID_VAR, MY_RF24_ADDR_WIDTH);
 	
-	/*
-	//ADDED
-	// reset FIFO
-	RF24_flushRX();
-	RF24_flushTX();
-	// reset interrupts
-	RF24_setStatus(_BV(RF24_TX_DS) | _BV(RF24_MAX_RT) | _BV(RF24_RX_DR));
-	//ADDED STOP
-	*/
-	
 	RF24_BASE_ID_VAR[0] = iTempVar0;
 	
-	//lcd.home();
 	lcd.setCursor(0, 0);
 	lcd.print(F("nRF24 DOCTOR"));
 	lcd.setCursor(0, 1);
@@ -478,11 +506,14 @@ void onButton1Pressed() {			//Scroll through the menu items
 			opState = STATE_RUN3;
 			break;			
 		case STATE_RUN3:
-			opState = STATE_CURLEVEL;
+			opState = STATE_CURLEVEL_ACTIVE;
 			break;			
-		case STATE_CURLEVEL:
-			opState = STATE_SET_RESET;
+		case STATE_CURLEVEL_ACTIVE:
+			opState = STATE_CURLEVEL_SLEEP;
 			break;
+		case STATE_CURLEVEL_SLEEP:
+			opState = STATE_SET_RESET;
+			break;			
 		case STATE_SET_RESET:
 			opState = STATE_SET_DESTINATION_NODE;
 			break;
@@ -526,9 +557,12 @@ void onButton2Pressed() {	//Apply/Select change (if available). In Viewing windo
 		case STATE_RUN3:
 			//Do nothing
 			break;			
-		case STATE_CURLEVEL:
+		case STATE_CURLEVEL_ACTIVE:
 			//Do nothing
 			break;
+		case STATE_CURLEVEL_SLEEP:
+			//Do nothing
+			break;			
 		case STATE_SET_RESET:
 			ClearStorageAndCounters();
 			opState = STATE_RUN;
@@ -577,17 +611,6 @@ void onButton2Pressed() {	//Apply/Select change (if available). In Viewing windo
 			break;
 		case STATE_UPDATE_GATEWAY:
 			iRetryGateway++; if (iRetryGateway > (iNrGatwayRetryOptions-1)) iRetryGateway = 0;
-/* 			switch(iRetryGateway){
-				case 0: 
-					bUpdateGateway = 0;
-					break;
-				case 1:
-					bUpdateGateway = 1;
-					break;
-				case 2:
-					bUpdateGateway = 0;
-					break;				
-			} */
 			break;
 	}
 }
@@ -657,8 +680,8 @@ void getMeanAndMaxFromArray(uint16_t *mean_value, uint16_t *max_value, unsigned 
 		}
 	}
 	if (iNrOfSamples !=0){
-		*mean_value 	= (uint16_t) ((sum / (float)iNrOfSamples)/1000);
-		*max_value		= (uint16_t) (lMaxValue/1000L);
+		*mean_value 	= (uint16_t) (((sum / (float)iNrOfSamples)+500)/1000);
+		*max_value		= (uint16_t) ((lMaxValue+500)/1000L);
 	}
 	else {
 		*mean_value = 65535;	//INF identifier
@@ -667,13 +690,17 @@ void getMeanAndMaxFromArray(uint16_t *mean_value, uint16_t *max_value, unsigned 
 }
 
 float GetAvgADCBits(int iNrSamples) {
-	float sum = 0;
-	for (int i=0; i < iNrSamples; i++) {
-		sum = sum + analogRead(CURRENT_PIN);
-	}
-	return ((float)sum/(float)iNrSamples);
-}
+	//iNrSamples < 64, else risk of overflowing iAdcSum
+	iStartStorageAfterNrAdcSamples  = 0;
+	iStopStorageAfterNrAdcSamples 	= iNrSamples;
 
+	iNrAdcSamplesElapsed	= 0;
+	iAdcSum 				= 0;
+	bAdcDone 				= false;
+	ADCSRA |= bit (ADSC) | bit (ADIE);	  	//start new ADC conversion
+	while (!bAdcDone){delay(1);};			//Wait until all ADC conversions have completed
+	return ((float)iAdcSum/(float)(iNrSamples));
+}
 
 /*****************************************************************/
 /************************* LCD FUNCTIONS *************************/
@@ -682,6 +709,35 @@ float GetAvgADCBits(int iNrSamples) {
 void print_LCD_line(const char *string,int row, int col) {
 	lcd.setCursor(col-1,row-1);
 	lcd.print(string);
+}
+
+void printBufCurrent(const char *buf,int iBufSize, float fCurrent_uA,int iPowerModeVal){
+	//Check range for proper displaying	
+	if (fCurrent_uA > 1000){
+		int Current_mA = (int)(fCurrent_uA/1000);
+		if (Current_mA>=300){
+			snprintf_P(buf, iBufSize, PSTR("%s[mA]= ERR"),pcPowerModeNames[iPowerModeVal],Current_mA);
+		}
+		else if (Current_mA>=100){
+			snprintf_P(buf, iBufSize, PSTR("%s[mA]=%4d"),pcPowerModeNames[iPowerModeVal],Current_mA);
+		}
+		else if (Current_mA>=10){
+			int iDecCurrent = (int)(((fCurrent_uA/1000)-(float)Current_mA)*10+0.5);if (iDecCurrent>=10){iDecCurrent=iDecCurrent-10;Current_mA +=1;}
+			snprintf_P(buf, iBufSize, PSTR("%s[mA]=%2d.%1d"),pcPowerModeNames[iPowerModeVal],Current_mA,iDecCurrent);
+		}
+		else {				
+			int iDecCurrent = (int)(((fCurrent_uA/1000)-(float)Current_mA)*100+0.5);if (iDecCurrent >=100){iDecCurrent=iDecCurrent-100;Current_mA +=1;}
+			snprintf_P(buf, iBufSize, PSTR("%s[mA]=%1d.%02d"),pcPowerModeNames[iPowerModeVal],Current_mA,iDecCurrent);
+		}
+	}
+	else if (fCurrent_uA < 100){		
+		int iCurrent_uA = (int)fCurrent_uA;
+		int iDecCurrent_uA = (int)((fCurrent_uA-(float)iCurrent_uA)*10+0.5); if (iDecCurrent_uA >= 10){iDecCurrent_uA=iDecCurrent_uA-10;iCurrent_uA +=1;}
+			snprintf_P(buf, iBufSize, PSTR("%s[uA]=%2d.%1d"),pcPowerModeNames[iPowerModeVal],iCurrent_uA,iDecCurrent_uA);
+		}
+	else{
+		snprintf_P(buf, iBufSize, PSTR("%s[uA]=%4d"),pcPowerModeNames[iPowerModeVal],(int)fCurrent_uA);
+	}
 }
 
 void LCD_local_display(void) {
@@ -724,51 +780,22 @@ void LCD_local_display(void) {
 			print_LCD_line(buf,2, 1);
 			break;
 		}		
-		case STATE_CURLEVEL:
+		case STATE_CURLEVEL_ACTIVE:
 		{
-			float fCurrent_uA = 0;
-			if (iPowerMode == 1){
-				fCurrent_uA = StandbyCurrent_uA;
-			}
-			else{
-				fCurrent_uA = SleepCurrent_uA;	
-			}
-			Sprint(F("iPowerMode:"));Sprintln(iPowerMode);
-			Sprint(F("fCurrent_uA:"));Sprintln(fCurrent_uA);
-			
-			if (fCurrent_uA > 1000){
-				int Current_mA = (int)(fCurrent_uA/1000);
-				if (Current_mA>=300){
-					snprintf_P(buf, sizeof buf, PSTR("%s[mA]= ERR"),pcPowerModeNames[iPowerMode],Current_mA);
-				}
-				else if (Current_mA>=100){
-					snprintf_P(buf, sizeof buf, PSTR("%s[mA]=%4d"),pcPowerModeNames[iPowerMode],Current_mA);
-				}
-				else if (Current_mA>=10){
-					int iDecCurrent = (int)(((fCurrent_uA/1000)-(float)Current_mA)*10+0.5);if (iDecCurrent>=10){iDecCurrent=iDecCurrent-10;Current_mA +=1;}
-					snprintf_P(buf, sizeof buf, PSTR("%s[mA]=%2d.%1d"),pcPowerModeNames[iPowerMode],Current_mA,iDecCurrent);
-				}
-				else {				
-					int iDecCurrent = (int)(((fCurrent_uA/1000)-(float)Current_mA)*100+0.5);if (iDecCurrent >=100){iDecCurrent=iDecCurrent-100;Current_mA +=1;}
-					snprintf_P(buf, sizeof buf, PSTR("%s[mA]=%1d.%2d"),pcPowerModeNames[iPowerMode],Current_mA,iDecCurrent);
-				}
-			}
-			else if (fCurrent_uA < 100){		
-				int iCurrent_uA = (int)fCurrent_uA;
-				int iDecCurrent_uA = (int)((fCurrent_uA-(float)iCurrent_uA)*10+0.5); if (iDecCurrent_uA >= 10){iDecCurrent_uA=iDecCurrent_uA-10;iCurrent_uA +=1;}
-					snprintf_P(buf, sizeof buf, PSTR("%s[uA]=%2d.%1d"),pcPowerModeNames[iPowerMode],iCurrent_uA,iDecCurrent_uA);
-				}
-			else{
-				snprintf_P(buf, sizeof buf, PSTR("%s[uA]=%4d"),pcPowerModeNames[iPowerMode],(int)fCurrent_uA);
-			}
-			if (iPowerMode == 1){
-				print_LCD_line(buf,1, 1);				
-			}
-			else{
-				print_LCD_line(buf,2, 1);
-			}
+			lcd.clear();
+			printBufCurrent(buf,sizeof buf,TransmitCurrent_uA,1);
+			print_LCD_line(buf,1, 1);		
+			printBufCurrent(buf,sizeof buf,ReceiveCurrent_uA,2);
+			print_LCD_line(buf,2, 1);		
 			break;
 		}
+		case STATE_CURLEVEL_SLEEP:
+		{
+			lcd.clear();
+			printBufCurrent(buf,sizeof buf,SleepCurrent_uA,0);
+			print_LCD_line(buf,1, 1);				
+			break;
+		}		
 		case STATE_SET_RESET:
 		{
 			snprintf_P(buf, sizeof buf, PSTR("RESET BUFFERS?"));
