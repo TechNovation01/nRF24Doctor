@@ -38,6 +38,7 @@
 //**** MySensors *****
 //#define MY_DEBUG							// Enable debug prints to serial monitor
 //#define MY_DEBUG_VERBOSE_RF24				// debug nrf24
+#define MY_SPLASH_SCREEN_DISABLED			// Disable splash screen (saves some flash)
 #define MY_TRANSPORT_WAIT_READY_MS 10 		// [ms] Init timeout for gateway not reachable
 #define MY_NODE_ID 250						// Set a high node ID, which typically will not yet be used in the network
 #define MY_PARENT_NODE_IS_STATIC			// Fixed parent Node ID, else MySensors Transport will attempt automatic fix after successive failures...but we don't want that while diagnosing our connection
@@ -49,18 +50,59 @@
 //**** MySensors - Radio *****
 #define MY_RADIO_NRF24                  	// Enable and select radio type attached
 
+#define CHARACTER_DISPLAY
+
 #include <SPI.h>
 #include <MySensors.h>
-//#include <LiquidCrystal_I2C.h>                // LCD display with I2C interface
-#include <LiquidCrystal.h>                      // LCD display with parallel interface
+
+#ifdef CHARACTER_DISPLAY
+	//#include <LiquidCrystal_I2C.h>                // LCD display with I2C interface
+	#include <LiquidCrystal.h>                      // LCD display with parallel interface
+#else
+	#include <Adafruit_GFX.h>
+	#include <TFT_ILI9163C.h>
+#endif
+
 #include <OneButton.h> 							//from https://github.com/mathertel/OneButton/blob/master/examples/TwoButtons/TwoButtons.ino
 
 //**** LCD *****
-#define LCD_COLS 16
-#define LCD_ROWS 2
-//LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);  	// Set the LCD I2C address
-//LiquidCrystal_I2C lcd(0x27, 16, 2);  								// Set the LCD I2C address
-LiquidCrystal lcd(8, 7, 6, 5, 4, 3); 								// LCD with parallel interface
+#ifdef CHARACTER_DISPLAY
+	#define LCD_COLS 16
+	#define LCD_ROWS 2
+	//LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);  	// Set the LCD I2C address
+	//LiquidCrystal_I2C lcd(0x27, 16, 2);  								// Set the LCD I2C address
+	LiquidCrystal lcd(8, 7, 6, 5, 4, 3); 								// LCD with parallel interface
+#else
+	// Color definitions. BLACK & WHITE are defined in library.
+	#define BLUE            (0x001F)
+	#define RED             (0xF800)
+	#define GREEN           (0x07E0)
+	#define CYAN            (0x07FF)
+	#define MAGENTA         (0xF81F)
+	#define YELLOW          (0xFFE0) 
+
+	#define COLOR_BG        (BLACK)
+	#define COLOR_TEXT      (WHITE) 
+	#define COLOR_UNIT      (CYAN) 
+	#define COLOR_SETACT    (RED) 
+
+	#define TFT_WIDTH       (128)
+	#define TFT_HEIGHT      (128)
+
+	#define TEXT_SIZE       (1)
+	#define CHAR_HEIGHT     (8)
+	#define CHAR_WIDTH      (8)
+
+	#define LCD_COLS        ((TFT_WIDTH)/(CHAR_WIDTH))
+	#define LCD_ROWS        (2)	// for now
+
+	#define TEXT_HEIGHT(c)  ((c)*CHAR_HEIGHT)
+	#define TEXT_WIDTH(c)   ((c)*CHAR_WIDTH)
+	  
+	#define TFT_PIN_CS      (10)
+	#define TFT_PIN_DC      (4)
+	static TFT_ILI9163C tft(TFT_PIN_CS, TFT_PIN_DC);
+#endif
 
 //**** BUTTONS *****
 OneButton button1(BUTTON1_PIN, true); //PullUp, Activelow
@@ -221,9 +263,16 @@ void before() {						//Initialization before the MySensors library starts up
   	ADMUX  =  bit (REFS0) | bit (REFS1) | (adcPin & 0x07);  // ARef internal and select input port
 
 	//****  LCD *****
-	//  Wire.begin();  // I2C
-	lcd.begin(LCD_COLS, LCD_ROWS);
-	//lcd.setBacklight(HIGH);
+	#ifdef CHARACTER_DISPLAY
+		//  Wire.begin();  // I2C
+		lcd.begin(LCD_COLS, LCD_ROWS);
+		//lcd.setBacklight(HIGH);
+	#else
+		tft.begin();
+		tft.setRotation(1);
+      	tft.setTextColor(COLOR_TEXT, COLOR_BG);
+      	tft.setTextSize(TEXT_SIZE);
+	#endif
 
 	//****  BUTTON STATES *****
 	button1.attachClick(onButton1Pressed);
@@ -363,7 +412,7 @@ void receive(const MyMessage &message) {
 		
 		//Check Message (Round trip) Delay
 		uint8_t iIndexInTimeArray = IndexOfValueInArray(iNewMessage, iMessageIndexBuffer, iNrTimeDelays); //Look-up if message is present in MessageIndexBuffer for delay calculation
-		if ((iIndexInTimeArray >=0) && iIndexInTimeArray <=iNrTimeDelays){
+		if ((iIndexInTimeArray != 255) && iIndexInTimeArray <=iNrTimeDelays){
 			lTimeDelayBuffer_Destination_us[iIndexInTimeArray] = micros()-lTimeOfTransmit_us[iIndexInTimeArray];
 		}
 		iNrNAckMessages--;	//Received an Acknowledge Message (so one less No Ack)
@@ -427,10 +476,8 @@ void loadNewRadioSettings() {
 	
 	RF24_BASE_ID_VAR[0] = iTempVar0;
 	
-	lcd.setCursor(0, 0);
-	lcd.print(F("nRF24 DOCTOR"));
-	lcd.setCursor(0, 1);
-	lcd.print(F("Connecting..."));
+	print_LCD_line("nRF24 DOCTOR",  1, 1);
+	print_LCD_line("Connecting...", 2, 1);
 	transportWaitUntilReady(10000);		// Give it 10[s] to connect, else continue to allow user to set new connection settings
 }
 
@@ -496,7 +543,7 @@ void ButtonTick() {
 }
 
 void onButton1Pressed() {			//Scroll through the menu items
-	lcd.clear();
+	LCD_clear();
 	bDspRefresh = true;
 	switch (opState) {
 		case STATE_RUN:
@@ -632,6 +679,8 @@ void onButton2Hold() {	//Scroll through numbers quickly
 			iDestinationNode++;
 			bDspRefresh = true;
 			break;
+		default:
+			break;
 	}		
 }
 
@@ -706,9 +755,24 @@ float GetAvgADCBits(int iNrSamples) {
 /************************* LCD FUNCTIONS *************************/
 /*****************************************************************/
 
-void print_LCD_line(const char *string,int row, int col) {
-	lcd.setCursor(col-1,row-1);
+void print_LCD_line(const char *string, int row, int col) {
+	col--;
+	row--;
+#ifdef CHARACTER_DISPLAY
+	lcd.setCursor(col,row);
 	lcd.print(string);
+#else
+	tft.setCursor(TEXT_WIDTH(col), TEXT_HEIGHT(row)); 
+	tft.print(string);
+#endif
+}
+
+void LCD_clear() {
+#ifdef CHARACTER_DISPLAY
+	lcd.clear();
+#else
+	tft.fillScreen(COLOR_BG);
+#endif
 }
 
 void printBufCurrent(const char *buf,int iBufSize, float fCurrent_uA,int iPowerModeVal){
@@ -805,87 +869,85 @@ void LCD_local_display(void) {
 		case STATE_SET_DESTINATION_NODE:
 		{
 			if(opState==prevOpState){
-				char buf2[4];
-				lcd.setCursor(13, 0);
-				snprintf_P(buf2, sizeof buf2, PSTR("%3d"), iDestinationNode);
-				lcd.print(buf2);
+				char buf2[4];		// why not re-use buf?
+				snprintf(buf2, sizeof buf2, "%3d", iDestinationNode);
+				print_LCD_line(buf2, 1, 14);
 			}
 			else{
 				snprintf_P(buf, sizeof buf, PSTR("DEST. NODE = %3d"), iDestinationNode);
-				print_LCD_line(buf,1, 1);
+				print_LCD_line(buf, 1, 1);
 			}
 			break;
 		}
 		case STATE_SET_CHANNEL:
 		{
 			if(opState==prevOpState){
-				char buf2[4];
-				lcd.setCursor(13, 0);
-				snprintf_P(buf2, sizeof buf2, PSTR("%3d"), iRf24Channel);
-				lcd.print(buf2);
+				char buf2[4];		// why not re-use buf?
+				snprintf(buf2, sizeof buf2, "%3d", iRf24Channel);
+				print_LCD_line(buf2, 1, 14);
 			}
 			else{
 				snprintf_P(buf, sizeof buf, PSTR("CHANNEL NR = %3d"), iRf24Channel);
-				print_LCD_line(buf,1, 1);
+				print_LCD_line(buf, 1, 1);
 			}
 			break;
 		}
 		case STATE_SET_PALEVEL:
 		{
-			lcd.clear();
+			LCD_clear();
 			snprintf_P(buf, sizeof buf, PSTR("NODE"));
-			print_LCD_line(buf,1, 1);
+			print_LCD_line(buf, 1, 1);
 			snprintf_P(buf, sizeof buf, PSTR("PA Level = %s"), pcPaLevelNames[iRf24PaLevel]);
-			print_LCD_line(buf,2, 1);
+			print_LCD_line(buf, 2, 1);
 			break;
 		}
 		case STATE_SET_PALEVEL_GW:
 		{
-			lcd.clear();
+			LCD_clear();
 			snprintf_P(buf, sizeof buf, PSTR("GATEWAY"));
-			print_LCD_line(buf,1, 1);
+			print_LCD_line(buf, 1, 1);
 			snprintf_P(buf, sizeof buf, PSTR("PA Level = %s"), pcPaLevelNames[iRf24PaLevelGw]);
-			print_LCD_line(buf,2, 1);
+			print_LCD_line(buf, 2, 1);
 			break;
 		}
 		case STATE_SET_DATARATE:
 		{
-			lcd.clear();
+			LCD_clear();
 			snprintf_P(buf, sizeof buf, PSTR("DataRate=%s"), pcDataRateNames[iRf24DataRate]);
-			print_LCD_line(buf,1, 1);
+			print_LCD_line(buf, 1, 1);
 			break;
 		}
 		case STATE_SET_BASE_RADIO_ID:
 		{
-			lcd.clear();
+			LCD_clear();
 			snprintf_P(buf, sizeof buf, PSTR("Base Radio ID=  "));
-			print_LCD_line(buf,1, 1);
+			print_LCD_line(buf, 1, 1);
 			snprintf_P(buf, sizeof buf, PSTR("%02X:%0.2X:%0.2X:%0.2X:%0.2X"),RF24_BASE_ID_VAR[0],RF24_BASE_ID_VAR[1],RF24_BASE_ID_VAR[2],RF24_BASE_ID_VAR[3],RF24_BASE_ID_VAR[4]);
-			print_LCD_line(buf,2, 1);
+			print_LCD_line(buf, 2, 1);
 			break;
 		}		
 		case STATE_ASK_GATEWAY:
 		{
-			lcd.clear();
+			LCD_clear();
 			snprintf_P(buf, sizeof buf, PSTR("UPDATE GATEWAY?:"));
-			print_LCD_line(buf,1, 1);
+			print_LCD_line(buf, 1, 1);
 			if (bUpdateGateway){
 				snprintf_P(buf, sizeof buf, PSTR("YES"));
-				print_LCD_line(buf,2, 14);
+				print_LCD_line(buf, 2, 14);
 			}
 			else{
 				snprintf_P(buf, sizeof buf, PSTR("NO"));
-				print_LCD_line(buf,2, 15);
+				print_LCD_line(buf, 2, 15);
 			}
 			break;
 		}			
 		case STATE_UPDATE_GATEWAY:
 		{
-			lcd.clear();
+			LCD_clear();
 			snprintf_P(buf, sizeof buf, PSTR("FAILED GATEWAY!"));
-			print_LCD_line(buf,1, 1);
+			print_LCD_line(buf, 1, 1);
 			snprintf_P(buf, sizeof buf, PSTR("%s"),pcGatewayRetryNames[iRetryGateway]);
-			print_LCD_line(buf,2, 1);
+			print_LCD_line(buf, 2, 1);
 			break;								
 		}	
 	}
