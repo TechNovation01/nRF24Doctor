@@ -1,7 +1,7 @@
 /*
   PROJECT: 		MySensors nRF24 Doctor
-  PROGRAMMER: 	Technovation (based on the work of AWI and Heizelmann)
-  DATE: 		2018March27
+  PROGRAMMER: 	Technovation & Yveaux
+  DATE: 		2018April18
   FILE: 		nRF24DoctorNode.ino
 
   Hardware: 	ATMega328p board
@@ -12,6 +12,7 @@
   Change log:
 	2018/03/27	New Release, based on: https://forum.mysensors.org/topic/3984/nrf24l01-connection-quality-meter
 	2018/04/13	Fixed some bugs in Current Measurement & display of currents
+	2018/04/17	Added support for TFT_ILI9163C display
 */
 
 //**** CONNECTIONS *****
@@ -332,7 +333,7 @@ void loop() {
 			//Transmit Current Measurement
 			EIFR |= 0x01;					//Clear interrupt flag to prevent an immediate trigger
 			attachInterrupt(digitalPinToInterrupt(2), ISR_TransmitTriggerADC, RISING);
-			boolean bSuccessfulTransmit = transmit();
+			transmit();
 			lLastTransmit = micros();
 			
 			for (int n=1;n<100;n++){
@@ -344,21 +345,20 @@ void loop() {
 			getMeanAndMaxFromArray(&iMeanDelayFirstHop_ms,&iMaxDelayFirstHop_ms,lTimeDelayBuffer_FirstHop_us,iNrTimeDelays);
 			getMeanAndMaxFromArray(&iMeanDelayDestination_ms,&iMaxDelayDestination_ms,lTimeDelayBuffer_Destination_us,iNrTimeDelays);
 
-			//Did we have a correct transmit? => Only then check the TX&RX currents.
-			if (bSuccessfulTransmit){
-				while (!bAdcDone){wait(1);};	//Check that all ADC conversions have completed
-				TransmitCurrent_uA = uAperBit1*((float)iAdcSum/(float)(iStopStorageAfterNrAdcSamples-iStartStorageAfterNrAdcSamples+1));
-				
-				//Receive Current Measurement
-				ReceiveCurrent_uA = uAperBit1*GetAvgADCBits(iNrCurrentMeasurements);
+			//Did we have a correct trigger of the ADC (i.e. a correct transmit), then it should have completed already...
+			if (bAdcDone){
+				TransmitCurrent_uA 	= uAperBit1*((float)iAdcSum/(float)(iStopStorageAfterNrAdcSamples-iStartStorageAfterNrAdcSamples+1));
+				ReceiveCurrent_uA 	= uAperBit1*GetAvgADCBits(iNrCurrentMeasurements);
 				Sprint(F("TransmitCurrent_uA:"));Sprintln(TransmitCurrent_uA);
 				Sprint(F("ReceiveCurrent_uA:"));Sprintln(ReceiveCurrent_uA);
 			}
-			else{ //Current Measurement
-				TransmitCurrent_uA = 10000000;	//Will show ERR on display
-				ReceiveCurrent_uA =  10000000;	//Will show ERR on display
-			}
+			else{ //Current Measurement could not be completed...probably because the transmit failed
+				TransmitCurrent_uA 	= 10000000;	//Will show ERR on display
+				ReceiveCurrent_uA 	= 10000000;	//Will show ERR on display
+				Sprint(F("TransmitCurrent_uA:"));Sprintln(F("FAILED"));
+				Sprint(F("ReceiveCurrent_uA:"));Sprintln(F("FAILED"));
 
+			}
 			//Sleep Current Measurement
 			transportDisable();
 			delay(10);									//Gate charge time and settle time, don't use wait as it will prevent the radio from sleep
@@ -424,7 +424,7 @@ void receive(const MyMessage &message) {
 	}
 }
 
-boolean transmit() {
+void transmit() {
 	static int iIndexInArrayFailedMessages  = 0 ;
 	static int iIndexInArrayTimeMessages  = 0 ;	
 
@@ -453,7 +453,6 @@ boolean transmit() {
 		unsigned long temptime = lTimeDelayBuffer_FirstHop_us[iIndexInArrayTimeMessages];
 		bArrayFailedMessages[iIndexInArrayFailedMessages] = false;	//Log it as a not-failed = succesful message (for rolling average)
 	}
-	return success;
 }
 
 /********************************************************************************/
@@ -748,6 +747,7 @@ float GetAvgADCBits(int iNrSamples) {
 	bAdcDone 				= false;
 	ADCSRA |= bit (ADSC) | bit (ADIE);	  	//start new ADC conversion
 	while (!bAdcDone){delay(1);};			//Wait until all ADC conversions have completed
+	bAdcDone 				= false;
 	return ((float)iAdcSum/(float)(iNrSamples));
 }
 
