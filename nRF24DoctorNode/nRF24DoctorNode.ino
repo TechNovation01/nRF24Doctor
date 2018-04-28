@@ -455,7 +455,7 @@ void transmit() {
 	}
 	else{
 		lTimeDelayBuffer_FirstHop_us[iIndexInArrayTimeMessages] = micros() - lTimeOfTransmit_us[iIndexInArrayTimeMessages];	//Log First Hop Delay in buffer
-		unsigned long temptime = lTimeDelayBuffer_FirstHop_us[iIndexInArrayTimeMessages];
+//		unsigned long temptime = lTimeDelayBuffer_FirstHop_us[iIndexInArrayTimeMessages];
 		bArrayFailedMessages[iIndexInArrayFailedMessages] = false;	//Log it as a not-failed = succesful message (for rolling average)
 	}
 }
@@ -780,12 +780,12 @@ void LCD_clear() {
 #endif
 }
 
-void printBufCurrent(const char *buf,int iBufSize, float fCurrent_uA,int iPowerModeVal){
+void printBufCurrent(char *buf,int iBufSize, float fCurrent_uA,int iPowerModeVal){
 	//Check range for proper displaying	
 	if (fCurrent_uA > 1000){
 		int Current_mA = (int)(fCurrent_uA/1000);
 		if (Current_mA>=300){
-			snprintf_P(buf, iBufSize, PSTR("%s[mA]= ERR"),pcPowerModeNames[iPowerModeVal],Current_mA);
+			snprintf_P(buf, iBufSize, PSTR("%s[mA]= ERR"),pcPowerModeNames[iPowerModeVal]);
 		}
 		else if (Current_mA>=100){
 			snprintf_P(buf, iBufSize, PSTR("%s[mA]=%4d"),pcPowerModeNames[iPowerModeVal],Current_mA);
