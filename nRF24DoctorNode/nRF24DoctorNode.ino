@@ -100,8 +100,8 @@
 	#define TEXT_HEIGHT(c)  ((c)*CHAR_HEIGHT)
 	#define TEXT_WIDTH(c)   ((c)*CHAR_WIDTH)
 	  
-	#define TFT_PIN_CS      (10)
-	#define TFT_PIN_DC      (4)
+	#define TFT_PIN_CS      (8)
+	#define TFT_PIN_DC      (7)
 	static TFT_ILI9163C tft(TFT_PIN_CS, TFT_PIN_DC);
 #endif
 
