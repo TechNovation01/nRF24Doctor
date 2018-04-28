@@ -177,9 +177,14 @@ const uint8_t iNrCurrentMeasurements 	= 60;	//Nr of measurements for averaging c
 const uint8_t iNrPowerModes = 3;
 const char *pcPowerModeNames[iNrPowerModes] = { "SLEEP", "TX", "RX" };
 
-const float uAperBit1 		= 473.1889;	//uAperBit = ((Vref/1024)/R1)*1e6 = ((1.1/1024)/2.2)*1e6				
-const float uAperBit2		= 10.41016;	//uAperBit = ((Vref/1024)/R2)*1e6 = ((1.1/1024)/100)*1e6
-const float uAperBit3 		= 0.105047;	//uAperBit = ((Vref/1024)/R3)*1e6 = ((1.1/1024)/10000)*1e6
+const float r1_ohm    = 2.2;
+const float r2_ohm    = 100.0;
+const float r3_ohm    = 10000.0;
+const float Vref_volt = 1.1;
+const float uAperBit1 = ((Vref_volt/1024.0)/r1_ohm)*1.0e6;
+const float uAperBit2	= ((Vref_volt/1024.0)/r2_ohm)*1.0e6;
+const float uAperBit3 = ((Vref_volt/1024.0)/r3_ohm)*1.0e6;
+
 float SleepCurrent_uA 	 	= 0;
 float TransmitCurrent_uA 	= 0;
 float ReceiveCurrent_uA  	= 0;
