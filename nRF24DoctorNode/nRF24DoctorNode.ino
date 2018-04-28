@@ -16,14 +16,15 @@
 */
 
 //**** CONNECTIONS *****
-#define BUTTON1_PIN A0
-#define BUTTON2_PIN A1
-#define MOSFET_2P2OHM_PIN A2
-#define MOSFET_100OHM_PIN A3
-#define CURRENT_PIN A5
-#define adcPin 5  				// A5, Match to CURRENT_PIN for configuring registers ADC
-#define INTERRUPT_CE_PIN 2		// Used as hardware trigger to start transmit current measurement
-#define TRIGGER_PIN A4			// Debugging purposes with scope
+#define ENCODER_A_PIN       A0
+#define ENCODER_B_PIN       A1
+#define MOSFET_2P2OHM_PIN   A2
+#define MOSFET_100OHM_PIN   A3
+#define BUTTON_PIN          A4    // physical pin , use internal pullup
+#define CURRENT_PIN         A5
+#define adcPin              5     // A5, Match to CURRENT_PIN for configuring registers ADC
+#define TRIGGER_PIN         A6    // Debugging purposes with scope
+#define INTERRUPT_CE_PIN    2	  // Used as hardware trigger to start transmit current measurement
 
 //**** DEBUG *****
 #define LOCAL_DEBUG
@@ -56,24 +57,20 @@
 #include <SPI.h>
 #include <MySensors.h>
 
+//**** LCD *****
 #ifdef CHARACTER_DISPLAY
 	//#include <LiquidCrystal_I2C.h>                // LCD display with I2C interface
 	#include <LiquidCrystal.h>                      // LCD display with parallel interface
-#else
-	#include <Adafruit_GFX.h>
-	#include <TFT_ILI9163C.h>
-#endif
 
-#include <OneButton.h> 							//from https://github.com/mathertel/OneButton/blob/master/examples/TwoButtons/TwoButtons.ino
-
-//**** LCD *****
-#ifdef CHARACTER_DISPLAY
 	#define LCD_COLS 16
 	#define LCD_ROWS 2
 	//LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);  	// Set the LCD I2C address
 	//LiquidCrystal_I2C lcd(0x27, 16, 2);  								// Set the LCD I2C address
 	LiquidCrystal lcd(8, 7, 6, 5, 4, 3); 								// LCD with parallel interface
 #else
+	#include <Adafruit_GFX.h>
+	#include <TFT_ILI9163C.h>
+
 	// Color definitions. BLACK & WHITE are defined in library.
 	#define BLUE            (0x001F)
 	#define RED             (0xF800)
@@ -105,9 +102,63 @@
 	static TFT_ILI9163C tft(TFT_PIN_CS, TFT_PIN_DC);
 #endif
 
-//**** BUTTONS *****
-OneButton button1(BUTTON1_PIN, true); //PullUp, Activelow
-OneButton button2(BUTTON2_PIN, true); //PullUp, Activelow
+
+//**** LCD Menu *****
+#include <LCDMenuLib2.h>
+
+#define _LCDML_DISP_cols             LCD_COLS
+#define _LCDML_DISP_rows             LCD_ROWS
+#define _LCDML_DISP_cfg_scrollbar    1      // enable a scrollbar
+
+#ifdef CHARACTER_DISPLAY
+const uint8_t scroll_bar[5][8] = {
+	{B10001, B10001, B10001, B10001, B10001, B10001, B10001, B10001}, // scrollbar top
+	{B11111, B11111, B10001, B10001, B10001, B10001, B10001, B10001}, // scroll state 1 
+	{B10001, B10001, B11111, B11111, B10001, B10001, B10001, B10001}, // scroll state 2
+	{B10001, B10001, B10001, B10001, B11111, B11111, B10001, B10001}, // scroll state 3
+	{B10001, B10001, B10001, B10001, B10001, B10001, B11111, B11111}  // scrollbar bottom
+}; 
+#endif
+
+void lcdml_menu_display(); 
+void lcdml_menu_clear(); 
+void lcdml_menu_control();
+
+static LCDMenuLib2_menu LCDML_0 (255, 0, 0, NULL, NULL); // root menu element (do not change)
+static LCDMenuLib2 LCDML(LCDML_0, LCD_ROWS, LCD_COLS, lcdml_menu_display, lcdml_menu_clear, lcdml_menu_control);
+
+//                (id   prev_layer      new_num                      lang_char_array     callback_function)  
+LCDML_add         (0  , LCDML_0         , 1                        , "Statistics"      , dispStatistics);
+LCDML_add         (1  , LCDML_0         , 2                        , "Timing"          , dispTiming);
+LCDML_add         (2  , LCDML_0         , 3                        , "Counters"        , dispCounters);
+LCDML_add         (3  , LCDML_0         , 4                        , "TxRx Power"      , dispTxRxPower);
+LCDML_add         (4  , LCDML_0         , 5                        , "Sleep Power"     , dispSleepPower);
+LCDML_add         (5  , LCDML_0         , 6                        , "Settings"        , NULL);
+//                (id   prev_layer      new_num  condition           lang_char_array     callback_function  parameter (0-255)  menu function type )
+/*
+LCDML_addAdvanced (5  , LCDML_0_5       , 1    , NULL              , ""                , mDyn_para_channel,                10,   _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (6  , LCDML_0_5       , 2    , NULL              , ""                , mDyn_para_gwnode,                 20,   _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (7  , LCDML_0_5       , 3    , NULL              , ""                , mDyn_para_gwpa,                   30,   _LCDML_TYPE_dynParam);
+LCDML_add         (8  , LCDML_0_5       , 4                        , "Back"            , mFunc_back);
+*/
+#define _LCDML_DISP_cnt    5   // Should equal last id in menu
+
+
+
+LCDML_createMenu(_LCDML_DISP_cnt);
+
+# if(_LCDML_DISP_rows > _LCDML_DISP_cfg_max_rows)
+# error change value of _LCDML_DISP_cfg_max_rows in LCDMenuLib2.h
+# endif
+
+//**** ENCODER & BUTTON  *****
+//#define ENCODER_OPTIMIZE_INTERRUPTS //Only when using pin2/3 (or 20/21 on mega)
+#define ENCODER_DO_NOT_USE_INTERRUPTS
+#include <Encoder.h>    // for Encoder      Download: https://github.com/PaulStoffregen/Encoder
+#include <Bounce2.h>	// button debounce  Download: https://github.com/thomasfredericks/Bounce2
+
+static Encoder encoder(ENCODER_A_PIN, ENCODER_B_PIN);
+static Bounce button = Bounce(); 
 
 //**** EEPROM STORAGE LOCATIONS *****
 #define EEPROM_FLAG 0
@@ -134,16 +185,11 @@ uint16_t iNrFailedMessages = 0;            							// total of Failed Messages
 uint16_t iNrNAckMessages = 0;              							// total of Not Acknowledged Messages
 uint16_t iMessageCounter = 0;
 
-//**** LCD MENU Constants&Variables ****
-enum mode {STATE_RUN, STATE_RUN2, STATE_RUN3, STATE_CURLEVEL_ACTIVE,STATE_CURLEVEL_SLEEP, STATE_SET_RESET, STATE_SET_DESTINATION_NODE, STATE_SET_CHANNEL, STATE_SET_BASE_RADIO_ID, STATE_SET_PALEVEL, STATE_SET_PALEVEL_GW, STATE_SET_DATARATE, STATE_ASK_GATEWAY, STATE_UPDATE_GATEWAY };
-mode opState = STATE_RUN;											// Default Mode
-boolean bDspRefresh = true;
-
 //nRF24 Settings
 const uint8_t iNrPaLevels = 4;
-const char *pcPaLevelNames[iNrPaLevels] 		= { "MIN", "LOW", "HIGH", "MAX" };
+const char *pcPaLevelNames[iNrPaLevels]   = { "MIN", "LOW", "HIGH", "MAX" };
 const uint8_t iNrDataRates = 3;
-const char *pcDataRateNames[iNrDataRates] 		= { "1MBPS", "2MBPS" , "250KBPS"};
+const char *pcDataRateNames[iNrDataRates] = { "1MBPS", "2MBPS" , "250KBPS"};
 
 //Define your available RF24_BASE_ID 
 const uint8_t iNrBaseRadioIds = 4;
@@ -201,9 +247,50 @@ uint8_t iRetryGateway 	= 0;
 bool bUpdateGateway 	= 0;
 bool bAckGatewayUpdate 	= 0;
 const uint8_t iNrGatwayRetryOptions = 3;
-const char *pcGatewayRetryNames[iNrGatwayRetryOptions] 		= { "SKIP GATEWAY", "RETRY GATEWAY" , "CANCEL ALL"};
+const char *pcGatewayRetryNames[iNrGatwayRetryOptions] = { "SKIP GATEWAY", "RETRY GATEWAY" , "CANCEL ALL"};
 
+/*****************************************************************************/
+/******************************* ENCODER & BUTTON ****************************/
+/*****************************************************************************/
 
+void lcdml_menu_control(void)
+{
+  if (LCDML.BT_setup()) 
+  {
+    // run once; init pins & debouncer
+    pinMode(ENCODER_A_PIN      , INPUT_PULLUP);
+    pinMode(ENCODER_B_PIN      , INPUT_PULLUP);
+    pinMode(BUTTON_PIN , INPUT_PULLUP); 
+	button.attach(BUTTON_PIN);
+	button.interval(5); // interval in ms
+  }
+  
+  const int8_t encStep = 4;
+  const int8_t enc = int8_t(encoder.read());
+  button.update();
+  const bool pressed = button.read() == LOW;
+  static bool prevPressed = false;
+
+  if (enc <= (-encStep + 1) )
+  {
+    LCDML.BT_down();
+    encoder.write(enc + encStep);
+  }  
+  else if (enc >= (encStep - 1))
+  {
+    LCDML.BT_up();
+    encoder.write(enc - encStep);
+  }  
+  else 
+  {
+	if (pressed and (not prevPressed))
+	{
+		// Pressed and previously not pressed
+		LCDML.BT_enter();  
+	}
+	prevPressed = pressed;
+  }
+}
 
 /*****************************************************************************/
 /******************************** ADC INTERRUPT ******************************/
@@ -229,7 +316,7 @@ ISR (ADC_vect){
 }
 
 void ISR_TransmitTriggerADC(){
-	detachInterrupt(digitalPinToInterrupt(2));
+	detachInterrupt(digitalPinToInterrupt(INTERRUPT_CE_PIN));
 	//Settings for TX - Transmit measurement
 	iStartStorageAfterNrAdcSamples  = 7; 	//Note this depends on the set ADC prescaler (currently: 16x prescaler) + Matched to TX timing
 	switch (iRf24DataRate){
@@ -262,7 +349,7 @@ void before() {						//Initialization before the MySensors library starts up
 	pinMode(INTERRUPT_CE_PIN,INPUT);
 	digitalWrite(MOSFET_2P2OHM_PIN,HIGH);
 	digitalWrite(TRIGGER_PIN,LOW);
-	
+
 	//**** ADC SETUP ****
 	ADCSRA =  bit (ADEN);                      				// turn ADC on
   	ADCSRA |= bit (ADPS2);                               	// Prescaler of 16: To get sufficient samples in Tx Current Measurement 
@@ -271,7 +358,14 @@ void before() {						//Initialization before the MySensors library starts up
 	//****  LCD *****
 	#ifdef CHARACTER_DISPLAY
 		//  Wire.begin();  // I2C
+		lcd.clear();
 		lcd.begin(LCD_COLS, LCD_ROWS);
+		// set special chars for scrollbar
+		lcd.createChar(0, (uint8_t*)scroll_bar[0]);
+		lcd.createChar(1, (uint8_t*)scroll_bar[1]);
+		lcd.createChar(2, (uint8_t*)scroll_bar[2]);
+		lcd.createChar(3, (uint8_t*)scroll_bar[3]);
+		lcd.createChar(4, (uint8_t*)scroll_bar[4]);  
 		//lcd.setBacklight(HIGH);
 	#else
 		tft.begin();
@@ -280,11 +374,6 @@ void before() {						//Initialization before the MySensors library starts up
       	tft.setTextSize(TEXT_SIZE);
 	#endif
 
-	//****  BUTTON STATES *****
-	button1.attachClick(onButton1Pressed);
-	button1.attachLongPressStart(onButton1LongPressed);
-	button2.attachClick(onButton2Pressed);
-	button2.attachDuringLongPress(onButton2Hold);
 
 	//****  RELOAD SETTINGS FROM EEPROM *****
 	if (loadState(EEPROM_FLAG) == 0xFF) {
@@ -313,6 +402,10 @@ void before() {						//Initialization before the MySensors library starts up
 
 void setup() {
 	loadNewRadioSettings();	//Load the Radio Settings as they are stored in EEPROM
+
+	//**** MENU *****
+    LCDML_setup(_LCDML_DISP_cnt);
+    LCDML.SCREEN_disable();
 }
 
 void presentation() {
@@ -323,87 +416,103 @@ void presentation() {
 /*****************************************************************************/
 /*********************************** MAIN LOOP *******************************/
 /*****************************************************************************/
-void loop() {
-	
-	/************ Update Button State ************/
-	ButtonTick();
+void loop()
+{
+    LCDML.loop();  
+	statemachine();
+}
 
-	/************ Update LCD ************/
-	if (bDspRefresh) LCD_local_display();	
-	
-	/************ PROCESS DIFFERENT OPERATIONAL STATES ************/
+/*****************************************************************************/
+/********************* TRANSMIT & MEASUREMENT STATEMACHINE *******************/
+/*****************************************************************************/
+
+enum state { STATE_IDLE, STATE_TX, STATE_TX_WAIT, STATE_SLEEP };
+static state currState = STATE_IDLE;
+static bool transmitAcive = true;
+
+void statemachine()
+{
 	static unsigned long lLastTransmit = 0;
-	switch (opState) {
-		case STATE_RUN: case STATE_RUN2: case STATE_RUN3: case STATE_CURLEVEL_ACTIVE: case STATE_CURLEVEL_SLEEP:{
+
+//	state prevState = currState;
+
+	switch (currState)
+	{
+		case STATE_IDLE:
+			// Do nothing, wait for start of next measurement
+			if (transmitAcive)
+			{
+				currState = STATE_TX;
+			}
+			break;
+
+		case STATE_TX:
 			//Transmit Current Measurement
 			EIFR |= 0x01;					//Clear interrupt flag to prevent an immediate trigger
-			attachInterrupt(digitalPinToInterrupt(2), ISR_TransmitTriggerADC, RISING);
+			attachInterrupt(digitalPinToInterrupt(INTERRUPT_CE_PIN), ISR_TransmitTriggerADC, RISING);
 			transmit();
 			lLastTransmit = micros();
-			
-			for (int n=1;n<100;n++){
-				wait(1);		//Allow for a fast return of the Acknowledge
-				ButtonTick();	//Check for button changes....we must keep responsive
-			}
+			currState = STATE_TX_WAIT;
+			break;			
 
-			//Calculate Mean and Max Delays
-			getMeanAndMaxFromArray(&iMeanDelayFirstHop_ms,&iMaxDelayFirstHop_ms,lTimeDelayBuffer_FirstHop_us,iNrTimeDelays);
-			getMeanAndMaxFromArray(&iMeanDelayDestination_ms,&iMaxDelayDestination_ms,lTimeDelayBuffer_Destination_us,iNrTimeDelays);
+		case STATE_TX_WAIT:
+			if (micros() - lLastTransmit >= 100000)
+			{
+				//Calculate Mean and Max Delays
+				getMeanAndMaxFromArray(&iMeanDelayFirstHop_ms,&iMaxDelayFirstHop_ms,lTimeDelayBuffer_FirstHop_us,iNrTimeDelays);
+				getMeanAndMaxFromArray(&iMeanDelayDestination_ms,&iMaxDelayDestination_ms,lTimeDelayBuffer_Destination_us,iNrTimeDelays);
 
-			//Did we have a correct trigger of the ADC (i.e. a correct transmit), then it should have completed already...
-			if (bAdcDone){
-				TransmitCurrent_uA 	= uAperBit1*((float)iAdcSum/(float)(iStopStorageAfterNrAdcSamples-iStartStorageAfterNrAdcSamples+1));
-				ReceiveCurrent_uA 	= uAperBit1*GetAvgADCBits(iNrCurrentMeasurements);
-				Sprint(F("TransmitCurrent_uA:"));Sprintln(TransmitCurrent_uA);
-				Sprint(F("ReceiveCurrent_uA:"));Sprintln(ReceiveCurrent_uA);
+				//Did we have a correct trigger of the ADC (i.e. a correct transmit), then it should have completed already...
+				if (bAdcDone) {
+					TransmitCurrent_uA 	= uAperBit1*((float)iAdcSum/(float)(iStopStorageAfterNrAdcSamples-iStartStorageAfterNrAdcSamples+1));
+					ReceiveCurrent_uA 	= uAperBit1*GetAvgADCBits(iNrCurrentMeasurements);
+				} else {
+					// Current Measurement could not be completed...probably because the transmit failed
+					TransmitCurrent_uA 	= 10000000;	//Will show ERR on display
+					ReceiveCurrent_uA 	= 10000000;	//Will show ERR on display
+				}
+//				Sprint(F("TransmitCurrent_uA:"));Sprintln(TransmitCurrent_uA);
+//				Sprint(F("ReceiveCurrent_uA:"));Sprintln(ReceiveCurrent_uA);
+				currState = STATE_SLEEP;
 			}
-			else{ //Current Measurement could not be completed...probably because the transmit failed
-				TransmitCurrent_uA 	= 10000000;	//Will show ERR on display
-				ReceiveCurrent_uA 	= 10000000;	//Will show ERR on display
-				Sprint(F("TransmitCurrent_uA:"));Sprintln(F("FAILED"));
-				Sprint(F("ReceiveCurrent_uA:"));Sprintln(F("FAILED"));
+			break;
 
-			}
+		case STATE_SLEEP:
 			//Sleep Current Measurement
 			transportDisable();
 			delay(10);									//Gate charge time and settle time, don't use wait as it will prevent the radio from sleep
 			SleepCurrent_uA = uAperBit1*GetAvgADCBits(iNrCurrentMeasurements);
 			if (SleepCurrent_uA < 10000){
 				//Set Higher Sensitivity: uAperBit2
-				digitalWrite(MOSFET_2P2OHM_PIN,LOW);
-				digitalWrite(MOSFET_100OHM_PIN,HIGH);
+				digitalWrite(MOSFET_2P2OHM_PIN, LOW);
+				digitalWrite(MOSFET_100OHM_PIN, HIGH);
 				delay(10);								//settle time
 				SleepCurrent_uA = uAperBit2*GetAvgADCBits(iNrCurrentMeasurements);
 			}
 			if (SleepCurrent_uA < 100){
 				//Set Higher Sensitivity: uAperBit3
-				digitalWrite(MOSFET_2P2OHM_PIN,LOW);
-				digitalWrite(MOSFET_100OHM_PIN,LOW);
+				digitalWrite(MOSFET_2P2OHM_PIN, LOW);
+				digitalWrite(MOSFET_100OHM_PIN, LOW);
 				delay(10);								//settle time
 				SleepCurrent_uA = uAperBit3*GetAvgADCBits(iNrCurrentMeasurements);
 			}
-			Sprint(F("SleepCurrent_uA:"));Sprintln(SleepCurrent_uA);
+//			Sprint(F("SleepCurrent_uA:"));Sprintln(SleepCurrent_uA);
 			
 			//Restore standby power state
-			digitalWrite(MOSFET_2P2OHM_PIN,HIGH);	//Enable 2.2Ohm
-			digitalWrite(MOSFET_100OHM_PIN,LOW);
+			digitalWrite(MOSFET_2P2OHM_PIN, HIGH);	//Enable 2.2Ohm
+			digitalWrite(MOSFET_100OHM_PIN, LOW);
 			transportStandBy();
 
-			bDspRefresh = true;
+			currState = STATE_IDLE;
+			break;			
+
+		default:
 			break;
-		}		
-		default:{	//Fast LCD update loop for settings without measurements displayed
-			lLastTransmit = micros()-DELAY_BETWEEN_MESSAGES_MICROS;
-			wait(25); // To limit LCD update rate
-			break;
-		}	
 	}
-	
-	//Wait before sending next message
-	while ((micros()- lLastTransmit) < DELAY_BETWEEN_MESSAGES_MICROS){// wait for things to settle and ack's to arrive
-		wait(1);
-		ButtonTick();	//Check for button changes....we must keep responsive
-	}
+	// if (currState != prevState)
+	// {
+	// 	Sprint(prevState); Sprint(F(" -> ")); Sprintln(currState);
+	// }
 }
 
 /*****************************************************************************/
@@ -480,9 +589,12 @@ void loadNewRadioSettings() {
 	
 	RF24_BASE_ID_VAR[0] = iTempVar0;
 	
+	LCD_clear();
 	print_LCD_line("nRF24 DOCTOR",  1, 1);
 	print_LCD_line("Connecting...", 2, 1);
+	Sprintln(F("Connecting..."));
 	transportWaitUntilReady(10000);		// Give it 10[s] to connect, else continue to allow user to set new connection settings
+	Sprintln(F("Done"));
 }
 
 void loadNewRadioSettingsGateway() {
@@ -510,9 +622,9 @@ void loadNewRadioSettingsGateway() {
 			break;
 		}					
 		case 2:	//Cancel All
-			opState = STATE_RUN;
+// TODO			opState = STATE_RUN;
 			LoadStatesFromEEPROM();
-			bDspRefresh = true;					
+//			bDspRefresh = true;					
 			break;
 	}
 }
@@ -538,13 +650,270 @@ void SaveStatesToEEPROM() {
 }
 
 /*****************************************************************/
+/**************** ARRAY PROCESSING FUNCTIONS *********************/
+/*****************************************************************/
+
+uint8_t IndexOfValueInArray(uint16_t val, uint16_t *array, uint8_t size){
+	// Find the (first) array element which equals val and return the index.
+	// If val not found in the array return 255
+    for (int i=0; i < size; i++) {
+        if (array[i] == val){
+			return i;
+		}
+    }
+    return 255;	//Not Found
+}
+
+int GetNrOfTrueValuesInArray(boolean countArray[], int size) {
+	// Calculate number of TRUE values in array
+	int Counter = 0 ;
+	for (int i = 0 ; i < size ; i++) {Counter += countArray[i];}
+	return Counter;
+}
+
+void ClearStorageAndCounters() {
+	for (int n = 0; n < iMaxNumberOfMessages; n++){
+		bArrayFailedMessages[n] = 0;
+		bArrayNAckMessages[n] = 0;
+	}
+	iNrNAckMessages = iMessageCounter = iNrFailedMessages = 0;
+	bAckGatewayUpdate = 0;
+}
+
+void getMeanAndMaxFromArray(uint16_t *mean_value, uint16_t *max_value, unsigned long *buffer, uint8_t size) {
+	//Note: excluding 0 values from mean calculation
+	uint8_t iNrOfSamples=0;		//max equals size
+	unsigned long lMaxValue=0;	//max Array value
+	float sum=0;
+	for (int i=0; i < size; i++)
+	{
+		if (buffer[i] != 0){
+			sum 		= sum + (float)buffer[i];	
+			lMaxValue	= max(lMaxValue,buffer[i]);
+			iNrOfSamples++;
+		}
+	}
+	if (iNrOfSamples !=0){
+		*mean_value 	= (uint16_t) (((sum / (float)iNrOfSamples)+500)/1000);
+		*max_value		= (uint16_t) ((lMaxValue+500)/1000L);
+	}
+	else {
+		*mean_value = 65535;	//INF identifier
+		*max_value 	= 65535;	//INF identifier
+	}	
+}
+
+float GetAvgADCBits(int iNrSamples) {
+	//iNrSamples < 64, else risk of overflowing iAdcSum
+	iStartStorageAfterNrAdcSamples  = 0;
+	iStopStorageAfterNrAdcSamples 	= iNrSamples;
+
+	iNrAdcSamplesElapsed	= 0;
+	iAdcSum 				= 0;
+	bAdcDone 				= false;
+	ADCSRA |= bit (ADSC) | bit (ADIE);	  	//start new ADC conversion
+	while (!bAdcDone){delay(1);};			//Wait until all ADC conversions have completed
+	bAdcDone 				= false;
+	return ((float)iAdcSum/(float)(iNrSamples));
+}
+
+/*****************************************************************/
+/************************* LCD FUNCTIONS *************************/
+/*****************************************************************/
+
+void print_LCD_line(const char *string, int row, int col) {
+	col--;
+	row--;
+#ifdef CHARACTER_DISPLAY
+	lcd.setCursor(col,row);
+	lcd.print(string);
+#else
+	tft.setCursor(TEXT_WIDTH(col), TEXT_HEIGHT(row)); 
+	tft.print(string);
+#endif
+}
+
+void LCD_clear() {
+#ifdef CHARACTER_DISPLAY
+	lcd.clear();
+#else
+	tft.fillScreen(COLOR_BG);
+#endif
+}
+
+/*****************************************************************/
+/************************* MENU HANDLERS *************************/
+/*****************************************************************/
+
+void dispStatistics(uint8_t param)
+{
+  (void)param;
+  if (LCDML.FUNC_setup())
+  {
+    // update lcd content
+    LCDML.FUNC_setLoopInterval(100);  // starts a trigger event for the loop function every 100 millisecounds
+  }
+
+  if(LCDML.FUNC_loop())
+  {
+	LCD_clear();
+	char buf[LCD_COLS+1];
+    snprintf_P(buf, sizeof buf, PSTR("P%-3dFAIL%4d%3d%%"), MY_PARENT_NODE_ID, iNrFailedMessages, GetNrOfTrueValuesInArray(bArrayFailedMessages, iMaxNumberOfMessages));
+	print_LCD_line(buf,1, 1);		
+    snprintf_P(buf, sizeof buf, PSTR("D%-3dNACK%4d%3d%%"), iDestinationNode , iNrNAckMessages, GetNrOfTrueValuesInArray(bArrayNAckMessages, iMaxNumberOfMessages));
+	print_LCD_line(buf,2, 1);		
+  
+    if (LCDML.BT_checkAny()) // check if any button is pressed (enter, up, down, left, right)
+    {      
+      LCDML.FUNC_goBackToMenu();  // leave this function   
+    }
+  } 
+
+//   if(LCDML.FUNC_close())
+//   {
+//   }
+} 
+
+void dispTiming(uint8_t param)
+{
+  (void)param;
+  if (LCDML.FUNC_setup())
+  {
+    // update lcd content
+    LCDML.FUNC_setLoopInterval(100);  // starts a trigger event for the loop function every 100 millisecounds
+  }
+
+  if(LCDML.FUNC_loop())
+  {
+	LCD_clear();
+	char buf[LCD_COLS+1];
+	if (iMaxDelayFirstHop_ms>9999){
+		snprintf_P(buf, sizeof buf, PSTR("HOP1 dTmax   INF"));
+	} else {
+		snprintf_P(buf, sizeof buf, PSTR("HOP1 dTmax%4dms"),iMaxDelayFirstHop_ms);
+	}
+	print_LCD_line(buf,1, 1);
+	if (iMaxDelayDestination_ms>9999){
+		snprintf_P(buf, sizeof buf, PSTR("D%-3d dTmax   INF"),iDestinationNode,iMaxDelayDestination_ms);
+	} else {
+		snprintf_P(buf, sizeof buf, PSTR("D%-3d dTmax%4dms"),iDestinationNode,iMaxDelayDestination_ms);
+	}
+	print_LCD_line(buf,2, 1);
+
+    if (LCDML.BT_checkAny()) // check if any button is pressed (enter, up, down, left, right)
+    {      
+      LCDML.FUNC_goBackToMenu();  // leave this function   
+    }
+  } 
+} 
+
+void dispCounters(uint8_t param)
+{
+  (void)param;
+  if (LCDML.FUNC_setup())
+  {
+    // update lcd content
+    LCDML.FUNC_setLoopInterval(100);  // starts a trigger event for the loop function every 100 millisecounds
+  }
+
+  if(LCDML.FUNC_loop())
+  {
+	LCD_clear();
+	char buf[LCD_COLS+1];
+	snprintf_P(buf, sizeof buf, PSTR("MESSAGE COUNT:  "));
+	print_LCD_line(buf,1, 1);
+	snprintf_P(buf, sizeof buf, PSTR("           %5d"),iMessageCounter);
+	print_LCD_line(buf,2, 1);
+
+    if (LCDML.BT_checkAny()) // check if any button is pressed (enter, up, down, left, right)
+    {      
+      LCDML.FUNC_goBackToMenu();  // leave this function   
+    }
+  } 
+} 
+
+void printBufCurrent(char *buf,int iBufSize, float fCurrent_uA,int iPowerModeVal){
+	//Check range for proper displaying	
+	if (fCurrent_uA > 1000){
+		int Current_mA = (int)(fCurrent_uA/1000);
+		if (Current_mA>=300){
+			snprintf_P(buf, iBufSize, PSTR("%s[mA]= ERR"),pcPowerModeNames[iPowerModeVal]);
+		}
+		else if (Current_mA>=100){
+			snprintf_P(buf, iBufSize, PSTR("%s[mA]=%4d"),pcPowerModeNames[iPowerModeVal],Current_mA);
+		}
+		else if (Current_mA>=10){
+			int iDecCurrent = (int)(((fCurrent_uA/1000)-(float)Current_mA)*10+0.5);if (iDecCurrent>=10){iDecCurrent=iDecCurrent-10;Current_mA +=1;}
+			snprintf_P(buf, iBufSize, PSTR("%s[mA]=%2d.%1d"),pcPowerModeNames[iPowerModeVal],Current_mA,iDecCurrent);
+		}
+		else {				
+			int iDecCurrent = (int)(((fCurrent_uA/1000)-(float)Current_mA)*100+0.5);if (iDecCurrent >=100){iDecCurrent=iDecCurrent-100;Current_mA +=1;}
+			snprintf_P(buf, iBufSize, PSTR("%s[mA]=%1d.%02d"),pcPowerModeNames[iPowerModeVal],Current_mA,iDecCurrent);
+		}
+	}
+	else if (fCurrent_uA < 100){		
+		int iCurrent_uA = (int)fCurrent_uA;
+		int iDecCurrent_uA = (int)((fCurrent_uA-(float)iCurrent_uA)*10+0.5); if (iDecCurrent_uA >= 10){iDecCurrent_uA=iDecCurrent_uA-10;iCurrent_uA +=1;}
+			snprintf_P(buf, iBufSize, PSTR("%s[uA]=%2d.%1d"),pcPowerModeNames[iPowerModeVal],iCurrent_uA,iDecCurrent_uA);
+		}
+	else{
+		snprintf_P(buf, iBufSize, PSTR("%s[uA]=%4d"),pcPowerModeNames[iPowerModeVal],(int)fCurrent_uA);
+	}
+}
+
+void dispTxRxPower(uint8_t param)
+{
+  (void)param;
+  if (LCDML.FUNC_setup())
+  {
+    // update lcd content
+    LCDML.FUNC_setLoopInterval(100);  // starts a trigger event for the loop function every 100 millisecounds
+  }
+
+  if(LCDML.FUNC_loop())
+  {
+	LCD_clear();
+	char buf[LCD_COLS+1];
+	printBufCurrent(buf,sizeof buf,TransmitCurrent_uA,1);
+	print_LCD_line(buf,1, 1);		
+	printBufCurrent(buf,sizeof buf,ReceiveCurrent_uA,2);
+	print_LCD_line(buf,2, 1);		
+
+    if (LCDML.BT_checkAny()) // check if any button is pressed (enter, up, down, left, right)
+    {      
+      LCDML.FUNC_goBackToMenu();  // leave this function   
+    }
+  } 
+} 
+
+void dispSleepPower(uint8_t param)
+{
+  (void)param;
+  if (LCDML.FUNC_setup())
+  {
+    // update lcd content
+    LCDML.FUNC_setLoopInterval(100);  // starts a trigger event for the loop function every 100 millisecounds
+  }
+
+  if(LCDML.FUNC_loop())
+  {
+	LCD_clear();
+	char buf[LCD_COLS+1];
+	printBufCurrent(buf,sizeof buf,SleepCurrent_uA,0);
+	print_LCD_line(buf,1, 1);				
+
+    if (LCDML.BT_checkAny()) // check if any button is pressed (enter, up, down, left, right)
+    {      
+      LCDML.FUNC_goBackToMenu();  // leave this function   
+    }
+  } 
+} 
+
+
+/*****************************************************************/
 /************************ BUTTON FUNCTIONS ***********************/
 /*****************************************************************/
-void ButtonTick() {
-	//Check Button States (should be done Frequently
-	button1.tick();
-	button2.tick();
-}
+/*
 
 void onButton1Pressed() {			//Scroll through the menu items
 	LCD_clear();
@@ -687,184 +1056,16 @@ void onButton2Hold() {	//Scroll through numbers quickly
 			break;
 	}		
 }
+*/
 
-/*****************************************************************/
-/**************** ARRAY PROCESSING FUNCTIONS *********************/
-/*****************************************************************/
-
-uint8_t IndexOfValueInArray(uint16_t val, uint16_t *array, uint8_t size){
-	// Find the (first) array element which equals val and return the index.
-	// If val not found in the array return 255
-    for (int i=0; i < size; i++) {
-        if (array[i] == val){
-			return i;
-		}
-    }
-    return 255;	//Not Found
-}
-
-int GetNrOfTrueValuesInArray(boolean countArray[], int size) {
-	// Calculate number of TRUE values in array
-	int Counter = 0 ;
-	for (int i = 0 ; i < size ; i++) {Counter += countArray[i];}
-	return Counter;
-}
-
-void ClearStorageAndCounters() {
-	for (int n = 0; n < iMaxNumberOfMessages; n++){
-		bArrayFailedMessages[n] = 0;
-		bArrayNAckMessages[n] = 0;
-	}
-	iNrNAckMessages = iMessageCounter = iNrFailedMessages = 0;
-	bAckGatewayUpdate = 0;
-}
-
-void getMeanAndMaxFromArray(uint16_t *mean_value, uint16_t *max_value, unsigned long *buffer, uint8_t size) {
-	//Note: excluding 0 values from mean calculation
-	uint8_t iNrOfSamples=0;		//max equals size
-	unsigned long lMaxValue=0;	//max Array value
-	float sum=0;
-	for (int i=0; i < size; i++)
-	{
-		if (buffer[i] != 0){
-			sum 		= sum + (float)buffer[i];	
-			lMaxValue	= max(lMaxValue,buffer[i]);
-			iNrOfSamples++;
-		}
-	}
-	if (iNrOfSamples !=0){
-		*mean_value 	= (uint16_t) (((sum / (float)iNrOfSamples)+500)/1000);
-		*max_value		= (uint16_t) ((lMaxValue+500)/1000L);
-	}
-	else {
-		*mean_value = 65535;	//INF identifier
-		*max_value 	= 65535;	//INF identifier
-	}	
-}
-
-float GetAvgADCBits(int iNrSamples) {
-	//iNrSamples < 64, else risk of overflowing iAdcSum
-	iStartStorageAfterNrAdcSamples  = 0;
-	iStopStorageAfterNrAdcSamples 	= iNrSamples;
-
-	iNrAdcSamplesElapsed	= 0;
-	iAdcSum 				= 0;
-	bAdcDone 				= false;
-	ADCSRA |= bit (ADSC) | bit (ADIE);	  	//start new ADC conversion
-	while (!bAdcDone){delay(1);};			//Wait until all ADC conversions have completed
-	bAdcDone 				= false;
-	return ((float)iAdcSum/(float)(iNrSamples));
-}
-
-/*****************************************************************/
-/************************* LCD FUNCTIONS *************************/
-/*****************************************************************/
-
-void print_LCD_line(const char *string, int row, int col) {
-	col--;
-	row--;
-#ifdef CHARACTER_DISPLAY
-	lcd.setCursor(col,row);
-	lcd.print(string);
-#else
-	tft.setCursor(TEXT_WIDTH(col), TEXT_HEIGHT(row)); 
-	tft.print(string);
-#endif
-}
-
-void LCD_clear() {
-#ifdef CHARACTER_DISPLAY
-	lcd.clear();
-#else
-	tft.fillScreen(COLOR_BG);
-#endif
-}
-
-void printBufCurrent(char *buf,int iBufSize, float fCurrent_uA,int iPowerModeVal){
-	//Check range for proper displaying	
-	if (fCurrent_uA > 1000){
-		int Current_mA = (int)(fCurrent_uA/1000);
-		if (Current_mA>=300){
-			snprintf_P(buf, iBufSize, PSTR("%s[mA]= ERR"),pcPowerModeNames[iPowerModeVal]);
-		}
-		else if (Current_mA>=100){
-			snprintf_P(buf, iBufSize, PSTR("%s[mA]=%4d"),pcPowerModeNames[iPowerModeVal],Current_mA);
-		}
-		else if (Current_mA>=10){
-			int iDecCurrent = (int)(((fCurrent_uA/1000)-(float)Current_mA)*10+0.5);if (iDecCurrent>=10){iDecCurrent=iDecCurrent-10;Current_mA +=1;}
-			snprintf_P(buf, iBufSize, PSTR("%s[mA]=%2d.%1d"),pcPowerModeNames[iPowerModeVal],Current_mA,iDecCurrent);
-		}
-		else {				
-			int iDecCurrent = (int)(((fCurrent_uA/1000)-(float)Current_mA)*100+0.5);if (iDecCurrent >=100){iDecCurrent=iDecCurrent-100;Current_mA +=1;}
-			snprintf_P(buf, iBufSize, PSTR("%s[mA]=%1d.%02d"),pcPowerModeNames[iPowerModeVal],Current_mA,iDecCurrent);
-		}
-	}
-	else if (fCurrent_uA < 100){		
-		int iCurrent_uA = (int)fCurrent_uA;
-		int iDecCurrent_uA = (int)((fCurrent_uA-(float)iCurrent_uA)*10+0.5); if (iDecCurrent_uA >= 10){iDecCurrent_uA=iDecCurrent_uA-10;iCurrent_uA +=1;}
-			snprintf_P(buf, iBufSize, PSTR("%s[uA]=%2d.%1d"),pcPowerModeNames[iPowerModeVal],iCurrent_uA,iDecCurrent_uA);
-		}
-	else{
-		snprintf_P(buf, iBufSize, PSTR("%s[uA]=%4d"),pcPowerModeNames[iPowerModeVal],(int)fCurrent_uA);
-	}
-}
-
+/*
 void LCD_local_display(void) {
 	static mode prevOpState = STATE_RUN;	//Remember previous state to allow for partial LCD updates
 	char buf[LCD_COLS+1];
 	bDspRefresh = false;
 	
 	switch (opState) {
-		case STATE_RUN:
-		{
-			snprintf_P(buf, sizeof buf, PSTR("P%-3dFAIL%4d%3d%%"), MY_PARENT_NODE_ID, iNrFailedMessages, GetNrOfTrueValuesInArray(bArrayFailedMessages, iMaxNumberOfMessages));
-			print_LCD_line(buf,1, 1);
-			snprintf_P(buf, sizeof buf, PSTR("D%-3dNACK%4d%3d%%"), iDestinationNode , iNrNAckMessages, GetNrOfTrueValuesInArray(bArrayNAckMessages, iMaxNumberOfMessages));
-			print_LCD_line(buf,2, 1);
-			break;
-		}
-		case STATE_RUN2:
-		{
-			if (iMaxDelayFirstHop_ms>9999){
-				snprintf_P(buf, sizeof buf, PSTR("HOP1 dTmax   INF"));
-			}
-			else{
-				snprintf_P(buf, sizeof buf, PSTR("HOP1 dTmax%4dms"),iMaxDelayFirstHop_ms);
-			}
-			print_LCD_line(buf,1, 1);
-			if (iMaxDelayDestination_ms>9999){
-				snprintf_P(buf, sizeof buf, PSTR("D%-3d dTmax   INF"),iDestinationNode,iMaxDelayDestination_ms);
-			}
-			else{
-				snprintf_P(buf, sizeof buf, PSTR("D%-3d dTmax%4dms"),iDestinationNode,iMaxDelayDestination_ms);
-			}
-			print_LCD_line(buf,2, 1);
-			break;
-		}
-		case STATE_RUN3:
-		{
-			snprintf_P(buf, sizeof buf, PSTR("MESSAGE COUNT:  "));
-			print_LCD_line(buf,1, 1);
-			snprintf_P(buf, sizeof buf, PSTR("           %5d"),iMessageCounter);
-			print_LCD_line(buf,2, 1);
-			break;
-		}		
-		case STATE_CURLEVEL_ACTIVE:
-		{
-			lcd.clear();
-			printBufCurrent(buf,sizeof buf,TransmitCurrent_uA,1);
-			print_LCD_line(buf,1, 1);		
-			printBufCurrent(buf,sizeof buf,ReceiveCurrent_uA,2);
-			print_LCD_line(buf,2, 1);		
-			break;
-		}
-		case STATE_CURLEVEL_SLEEP:
-		{
-			lcd.clear();
-			printBufCurrent(buf,sizeof buf,SleepCurrent_uA,0);
-			print_LCD_line(buf,1, 1);				
-			break;
-		}		
+
 		case STATE_SET_RESET:
 		{
 			snprintf_P(buf, sizeof buf, PSTR("RESET BUFFERS?"));
@@ -958,3 +1159,4 @@ void LCD_local_display(void) {
 	}
 	prevOpState = opState;
 }
+*/
