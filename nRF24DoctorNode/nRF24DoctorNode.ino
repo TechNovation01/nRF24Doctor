@@ -46,7 +46,6 @@ Change log:
 #define MY_PARENT_NODE_IS_STATIC			// Fixed parent Node ID, else MySensors Transport will attempt automatic fix after successive failures...but we don't want that while diagnosing our connection
 #define MY_PARENT_NODE_ID 0              	// Typically 0 for Gateway
 
-#define DESTINATION_NODE 0                	// Default 0 = gateway, Settable in Menu
 #define MY_BAUD_RATE 115200
 
 //**** MySensors - Radio *****
@@ -171,14 +170,15 @@ static Encoder encoder(ENCODER_A_PIN, ENCODER_B_PIN);
 static Bounce button = Bounce(); 
 
 //**** EEPROM STORAGE LOCATIONS *****
-#define EEPROM_FLAG 0
-#define EEPROM_CHANNEL 1
-#define EEPROM_PA_LEVEL 2
-#define EEPROM_PA_LEVEL_GW 3
-#define EEPROM_DATARATE 4
-#define EEPROM_BASE_RADIO_ID 5
-#define EEPROM_DESTINATION_NODE 6
-#define EEPROM_SEND_REPEATS 7
+#define EEPROM_FLAG_MAGIC		0xA5	// Indication contents are valid. Empty eeprom will contain 0xFF
+#define EEPROM_FLAG				0
+#define EEPROM_CHANNEL			1
+#define EEPROM_PA_LEVEL			2
+#define EEPROM_PA_LEVEL_GW		3
+#define EEPROM_DATARATE			4
+#define EEPROM_BASE_RADIO_ID	5
+#define EEPROM_DESTINATION_NODE	6
+#define EEPROM_SEND_REPEATS		7
 
 //**** MySensors Messages ****
 #define CHILD_ID_COUNTER 0
@@ -208,13 +208,19 @@ const uint8_t RF24_BASE_ID_VARS[][MY_RF24_ADDR_WIDTH] = {
 	, { 0x00,0xB1,0x47,0xEE,0x82 }
 };
 
-//Load Default Radio values
-uint8_t iRf24Channel 		= MY_RF24_CHANNEL;
-uint8_t iRf24PaLevel 		= MY_RF24_PA_LEVEL;		//PA Level for the Node
-uint8_t iRf24PaLevelGw 		= MY_RF24_PA_LEVEL;		//PA Level for the Gateway
-uint8_t iRf24DataRate 		= MY_RF24_DATARATE;
-uint8_t iRf24BaseRadioId 	= 1;
-uint8_t iDestinationNode	= DESTINATION_NODE;
+// Radio values
+uint8_t iRf24Channel;
+uint8_t iRf24PaLevel;		//PA Level for the Node
+uint8_t iRf24PaLevelGw;		//PA Level for the Gateway
+uint8_t iRf24DataRate;
+uint8_t iRf24BaseRadioId;
+uint8_t iDestinationNode;
+#define DEFAULT_RF24_CHANNEL		(MY_RF24_CHANNEL)
+#define DEFAULT_RF24_PA_LEVEL_NODE	(MY_RF24_PA_LEVEL)
+#define DEFAULT_RF24_PA_LEVEL_GW	(MY_RF24_PA_LEVEL)
+#define DEFAULT_RF24_DATARATE		(MY_RF24_DATARATE)
+#define DEFAULT_RF24_BASE_ID_IDX	(0)
+#define DEFAULT_DESTINATION_NODE	(0)				// Default 0 = gateway, Settable in Menu
 
 //**** Timing ****
 const uint8_t iNrTimeDelays = 10;
@@ -235,7 +241,7 @@ const float r2_ohm    = 100.0;
 const float r3_ohm    = 10000.0;
 const float Vref_volt = 1.1;
 const float uAperBit1 = ((Vref_volt/1024.0)/r1_ohm)*1.0e6;
-const float uAperBit2	= ((Vref_volt/1024.0)/r2_ohm)*1.0e6;
+const float uAperBit2 = ((Vref_volt/1024.0)/r2_ohm)*1.0e6;
 const float uAperBit3 = ((Vref_volt/1024.0)/r3_ohm)*1.0e6;
 
 float SleepCurrent_uA 	 	= 0;
@@ -385,18 +391,7 @@ void before() {						//Initialization before the MySensors library starts up
 
 
 	//****  RELOAD SETTINGS FROM EEPROM *****
-
-	// Yveaux: How about letting LoadStatesFromEEPROM decide if settings
-	// are valid and revert to default if they are not?
-
-	if (loadState(EEPROM_FLAG) == 0xFF) {
-		//RELOAD SETTINGS 
-		LoadStatesFromEEPROM();
-	} else {
-		//LOAD DEFAULT IN CASE OF CLEAN EEPROM
-		saveState(EEPROM_FLAG, 0xFF);
-		SaveStatesToEEPROM();
-	}
+	LoadStatesFromEEPROM();
 }
 
 void setup() {
@@ -632,26 +627,54 @@ void loadNewRadioSettingsGateway() {
 /*****************************************************************/
 /************************ EEPROM FUNCTIONS ***********************/
 /*****************************************************************/
-void LoadStatesFromEEPROM() {
-	iRf24Channel 		= loadState(EEPROM_CHANNEL);
-	iRf24PaLevel 		= loadState(EEPROM_PA_LEVEL);
-	iRf24PaLevelGw 		= loadState(EEPROM_PA_LEVEL_GW);
-	iRf24DataRate 		= loadState(EEPROM_DATARATE);
-	iRf24BaseRadioId	= loadState(EEPROM_BASE_RADIO_ID);
-	iDestinationNode 	= loadState(EEPROM_DESTINATION_NODE);
+void loadDefaults()
+{
+	iRf24Channel		= DEFAULT_RF24_CHANNEL;
+	iRf24PaLevel		= DEFAULT_RF24_PA_LEVEL_NODE;
+	iRf24PaLevelGw		= DEFAULT_RF24_PA_LEVEL_GW;
+	iRf24DataRate		= DEFAULT_RF24_DATARATE;
+	iRf24BaseRadioId	= DEFAULT_RF24_BASE_ID_IDX;
+	iDestinationNode	= DEFAULT_DESTINATION_NODE;
 	if (iRf24BaseRadioId < COUNT_OF(RF24_BASE_ID_VARS))
 	{
 		memcpy(RF24_BASE_ID_VAR, RF24_BASE_ID_VARS[iRf24BaseRadioId], sizeof(RF24_BASE_ID_VAR));
 	}
 }
 
-void SaveStatesToEEPROM() {
+void LoadStatesFromEEPROM()
+{
+	if (loadState(EEPROM_FLAG) == EEPROM_FLAG_MAGIC)
+	{
+		// Eeprom contents are valid
+		iRf24Channel 		= loadState(EEPROM_CHANNEL);
+		iRf24PaLevel 		= loadState(EEPROM_PA_LEVEL);
+		iRf24PaLevelGw 		= loadState(EEPROM_PA_LEVEL_GW);
+		iRf24DataRate 		= loadState(EEPROM_DATARATE);
+		iRf24BaseRadioId	= loadState(EEPROM_BASE_RADIO_ID);
+		iDestinationNode	= loadState(EEPROM_DESTINATION_NODE);
+		if (iRf24BaseRadioId < COUNT_OF(RF24_BASE_ID_VARS))
+		{
+			memcpy(RF24_BASE_ID_VAR, RF24_BASE_ID_VARS[iRf24BaseRadioId], sizeof(RF24_BASE_ID_VAR));
+		}
+	}
+	else
+	{
+		// Load defaults & save default to eeprom
+		loadDefaults();
+		SaveStatesToEEPROM();
+	}
+}
+
+void SaveStatesToEEPROM()
+{
 	saveState(EEPROM_CHANNEL, iRf24Channel);
 	saveState(EEPROM_PA_LEVEL, iRf24PaLevel);
 	saveState(EEPROM_PA_LEVEL_GW, iRf24PaLevelGw);
 	saveState(EEPROM_DATARATE, iRf24DataRate);
 	saveState(EEPROM_BASE_RADIO_ID, iRf24BaseRadioId);
 	saveState(EEPROM_DESTINATION_NODE, iDestinationNode);
+	// Mark eeprom contents valid
+	saveState(EEPROM_FLAG, EEPROM_FLAG_MAGIC);
 }
 
 /*****************************************************************/
@@ -998,8 +1021,9 @@ void menuDefaultEeprom(__attribute__((unused)) uint8_t param)
 	if (LCDML.FUNC_setup())
 	{
 		// TODO: Start the GW update sequence too!
-		// TODO: Actually revert to defaults
-	//	SaveStatesToEEPROM();
+		// loadNewRadioSettingsGateway();
+		loadDefaults();
+		SaveStatesToEEPROM();
 		LCDML.FUNC_goBackToMenu();
 	} 
 }
