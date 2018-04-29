@@ -104,7 +104,7 @@
 
 
 //**** LCD Menu *****
-#include <LCDMenuLib2.h>
+#include <LCDMenuLib2.h>	// Download: https://github.com/Jomelo/LCDMenuLib2
 
 #define _LCDML_DISP_cols             LCD_COLS
 #define _LCDML_DISP_rows             LCD_ROWS
@@ -127,21 +127,31 @@ void lcdml_menu_control();
 static LCDMenuLib2_menu LCDML_0 (255, 0, 0, NULL, NULL); // root menu element (do not change)
 static LCDMenuLib2 LCDML(LCDML_0, LCD_ROWS, LCD_COLS, lcdml_menu_display, lcdml_menu_clear, lcdml_menu_control);
 
-//                (id   prev_layer      new_num                      lang_char_array     callback_function)  
-LCDML_add         (0  , LCDML_0         , 1                        , "Statistics"      , dispStatistics);
-LCDML_add         (1  , LCDML_0         , 2                        , "Timing"          , dispTiming);
-LCDML_add         (2  , LCDML_0         , 3                        , "Counters"        , dispCounters);
-LCDML_add         (3  , LCDML_0         , 4                        , "TxRx Power"      , dispTxRxPower);
-LCDML_add         (4  , LCDML_0         , 5                        , "Sleep Power"     , dispSleepPower);
-LCDML_add         (5  , LCDML_0         , 6                        , "Settings"        , NULL);
-//                (id   prev_layer      new_num  condition           lang_char_array     callback_function  parameter (0-255)  menu function type )
-/*
-LCDML_addAdvanced (5  , LCDML_0_5       , 1    , NULL              , ""                , mDyn_para_channel,                10,   _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (6  , LCDML_0_5       , 2    , NULL              , ""                , mDyn_para_gwnode,                 20,   _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (7  , LCDML_0_5       , 3    , NULL              , ""                , mDyn_para_gwpa,                   30,   _LCDML_TYPE_dynParam);
-LCDML_add         (8  , LCDML_0_5       , 4                        , "Back"            , mFunc_back);
-*/
-#define _LCDML_DISP_cnt    5   // Should equal last id in menu
+enum page { PAGE_STATISTICS, PAGE_TIMING, PAGE_COUNTERS, PAGE_TXRXPOWER, PAGE_SLEEPPOWER };
+
+// add            (id   prev_layer      new_num                      lang_char_array     callback_function)  
+// addAdvanced    (id   prev_layer      new_num  condition           lang_char_array     callback_function  parameter (0-255)  menu function type )
+//                                                                   "01234567890123"
+LCDML_addAdvanced (0  , LCDML_0         , 1    , NULL              , "Statistics   >"  , menuPage         , PAGE_STATISTICS  , _LCDML_TYPE_default);
+LCDML_addAdvanced (1  , LCDML_0         , 2    , NULL              , "Timing       >"  , menuPage         , PAGE_TIMING      , _LCDML_TYPE_default);
+LCDML_addAdvanced (2  , LCDML_0         , 3    , NULL              , "Counters     >"  , menuPage         , PAGE_COUNTERS    , _LCDML_TYPE_default);
+LCDML_addAdvanced (3  , LCDML_0         , 4    , NULL              , "TxRx Power   >"  , menuPage         , PAGE_TXRXPOWER   , _LCDML_TYPE_default);
+LCDML_addAdvanced (4  , LCDML_0         , 5    , NULL              , "Sleep Power  >"  , menuPage         , PAGE_SLEEPPOWER  , _LCDML_TYPE_default);
+LCDML_add         (5  , LCDML_0         , 6                        , "Settings     >"  , NULL);
+LCDML_addAdvanced (6  , LCDML_0_6       , 1    , NULL              , ""                , menuCfgChannel   , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (7  , LCDML_0_6       , 2    , NULL              , ""                , menuCfgGwNode    , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (8  , LCDML_0_6       , 3    , NULL              , ""                , menuCfgGwPa      , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (9  , LCDML_0_6       , 4    , NULL              , ""                , menuCfgNodePa    , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (10 , LCDML_0_6       , 5    , NULL              , ""                , menuCfgRate      , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (11 , LCDML_0_6       , 6    , NULL              , ""                , menuCfgRadioId   , 0                , _LCDML_TYPE_dynParam);
+LCDML_add         (12 , LCDML_0_6       , 7                        , "Reset buff   x"  , menuResetBuf);
+LCDML_add         (13 , LCDML_0_6       , 8                        , "Eeprom       >"  , NULL);
+LCDML_add         (14 , LCDML_0_6_8     , 1                        , "Save         x"  , menuSaveEeprom);
+LCDML_add         (15 , LCDML_0_6_8     , 2                        , "Load         x"  , menuLoadEeprom);
+LCDML_add         (16 , LCDML_0_6_8     , 3                        , "Defaults     x"  , menuDefaultEeprom);
+LCDML_add         (17 , LCDML_0_6_8     , 4                        , "Back         <"  , menuBack);
+LCDML_add         (18 , LCDML_0_6       , 9                        , "Back         <"  , menuBack);
+#define _LCDML_DISP_cnt    18   // Should equal last id in menu
 
 
 
@@ -194,10 +204,12 @@ const char *pcDataRateNames[iNrDataRates] = { "1MBPS", "2MBPS" , "250KBPS"};
 //Define your available RF24_BASE_ID 
 const uint8_t iNrBaseRadioIds = 4;
 uint8_t RF24_BASE_ID_VAR[MY_RF24_ADDR_WIDTH]				= { 0x00,0xFC,0xE1,0xA8,0xA8 };		//Used to Store the active BASE_ID
-const uint8_t RF24_BASE_ID_VAR1[MY_RF24_ADDR_WIDTH] 		= { 0x00,0xFC,0xE1,0xA8,0xA8 };
-const uint8_t RF24_BASE_ID_VAR2[MY_RF24_ADDR_WIDTH] 		= { 0x00,0xA1,0xF3,0x09,0xB6 };
-const uint8_t RF24_BASE_ID_VAR3[MY_RF24_ADDR_WIDTH] 		= { 0x00,0xAA,0xA5,0xC4,0xD9 };
-const uint8_t RF24_BASE_ID_VAR4[MY_RF24_ADDR_WIDTH] 		= { 0x00,0xB1,0x47,0xEE,0x82 };
+const uint8_t RF24_BASE_ID_VARS[][MY_RF24_ADDR_WIDTH] = {
+	  { 0x00,0xFC,0xE1,0xA8,0xA8 }
+	, { 0x00,0xA1,0xF3,0x09,0xB6 }
+	, { 0x00,0xAA,0xA5,0xC4,0xD9 }
+	, { 0x00,0xB1,0x47,0xEE,0x82 }
+};
 
 //Load Default Radio values
 uint8_t iRf24Channel 		= MY_RF24_CHANNEL;
@@ -248,6 +260,8 @@ bool bUpdateGateway 	= 0;
 bool bAckGatewayUpdate 	= 0;
 const uint8_t iNrGatwayRetryOptions = 3;
 const char *pcGatewayRetryNames[iNrGatwayRetryOptions] = { "SKIP GATEWAY", "RETRY GATEWAY" , "CANCEL ALL"};
+
+#define constrain_hi(amt,high) ((amt)>(high)?(high):(amt))
 
 /*****************************************************************************/
 /******************************* ENCODER & BUTTON ****************************/
@@ -376,23 +390,13 @@ void before() {						//Initialization before the MySensors library starts up
 
 
 	//****  RELOAD SETTINGS FROM EEPROM *****
+
+	// Yveaux: How about letting LoadStatesFromEEPROM decide if settings
+	// are valid and revert to default if they are not?
+
 	if (loadState(EEPROM_FLAG) == 0xFF) {
 		//RELOAD SETTINGS 
 		LoadStatesFromEEPROM();
-		switch (iRf24BaseRadioId) {
-			case 1:
-				memcpy(RF24_BASE_ID_VAR,RF24_BASE_ID_VAR1,sizeof(RF24_BASE_ID_VAR));
-				break;
-			case 2:
-				memcpy(RF24_BASE_ID_VAR,RF24_BASE_ID_VAR2,sizeof(RF24_BASE_ID_VAR));
-				break;				
-			case 3:
-				memcpy(RF24_BASE_ID_VAR,RF24_BASE_ID_VAR3,sizeof(RF24_BASE_ID_VAR));
-				break;
-			case 4:
-				memcpy(RF24_BASE_ID_VAR,RF24_BASE_ID_VAR4,sizeof(RF24_BASE_ID_VAR));
-				break;
-		}		
 	} else {
 		//LOAD DEFAULT IN CASE OF CLEAN EEPROM
 		saveState(EEPROM_FLAG, 0xFF);
@@ -598,6 +602,8 @@ void loadNewRadioSettings() {
 }
 
 void loadNewRadioSettingsGateway() {
+	// Yveaux: This needs to land in a statemachine!
+
 	switch (iRetryGateway){
 		case 0:	//Skip Gateway update (= only update this Node)
 			//Store new values to EEPROM & Restart the program
@@ -638,6 +644,10 @@ void LoadStatesFromEEPROM() {
 	iRf24DataRate 		= loadState(EEPROM_DATARATE);
 	iRf24BaseRadioId	= loadState(EEPROM_BASE_RADIO_ID);
 	iDestinationNode 	= loadState(EEPROM_DESTINATION_NODE);
+	if (iRf24BaseRadioId < iNrBaseRadioIds)
+	{
+		memcpy(RF24_BASE_ID_VAR, RF24_BASE_ID_VARS[iRf24BaseRadioId], sizeof(RF24_BASE_ID_VAR));
+	}
 }
 
 void SaveStatesToEEPROM() {
@@ -744,94 +754,6 @@ void LCD_clear() {
 /*****************************************************************/
 /************************* MENU HANDLERS *************************/
 /*****************************************************************/
-
-void dispStatistics(uint8_t param)
-{
-  (void)param;
-  if (LCDML.FUNC_setup())
-  {
-    // update lcd content
-    LCDML.FUNC_setLoopInterval(100);  // starts a trigger event for the loop function every 100 millisecounds
-  }
-
-  if(LCDML.FUNC_loop())
-  {
-	LCD_clear();
-	char buf[LCD_COLS+1];
-    snprintf_P(buf, sizeof buf, PSTR("P%-3dFAIL%4d%3d%%"), MY_PARENT_NODE_ID, iNrFailedMessages, GetNrOfTrueValuesInArray(bArrayFailedMessages, iMaxNumberOfMessages));
-	print_LCD_line(buf,1, 1);		
-    snprintf_P(buf, sizeof buf, PSTR("D%-3dNACK%4d%3d%%"), iDestinationNode , iNrNAckMessages, GetNrOfTrueValuesInArray(bArrayNAckMessages, iMaxNumberOfMessages));
-	print_LCD_line(buf,2, 1);		
-  
-    if (LCDML.BT_checkAny()) // check if any button is pressed (enter, up, down, left, right)
-    {      
-      LCDML.FUNC_goBackToMenu();  // leave this function   
-    }
-  } 
-
-//   if(LCDML.FUNC_close())
-//   {
-//   }
-} 
-
-void dispTiming(uint8_t param)
-{
-  (void)param;
-  if (LCDML.FUNC_setup())
-  {
-    // update lcd content
-    LCDML.FUNC_setLoopInterval(100);  // starts a trigger event for the loop function every 100 millisecounds
-  }
-
-  if(LCDML.FUNC_loop())
-  {
-	LCD_clear();
-	char buf[LCD_COLS+1];
-	if (iMaxDelayFirstHop_ms>9999){
-		snprintf_P(buf, sizeof buf, PSTR("HOP1 dTmax   INF"));
-	} else {
-		snprintf_P(buf, sizeof buf, PSTR("HOP1 dTmax%4dms"),iMaxDelayFirstHop_ms);
-	}
-	print_LCD_line(buf,1, 1);
-	if (iMaxDelayDestination_ms>9999){
-		snprintf_P(buf, sizeof buf, PSTR("D%-3d dTmax   INF"),iDestinationNode,iMaxDelayDestination_ms);
-	} else {
-		snprintf_P(buf, sizeof buf, PSTR("D%-3d dTmax%4dms"),iDestinationNode,iMaxDelayDestination_ms);
-	}
-	print_LCD_line(buf,2, 1);
-
-    if (LCDML.BT_checkAny()) // check if any button is pressed (enter, up, down, left, right)
-    {      
-      LCDML.FUNC_goBackToMenu();  // leave this function   
-    }
-  } 
-} 
-
-void dispCounters(uint8_t param)
-{
-  (void)param;
-  if (LCDML.FUNC_setup())
-  {
-    // update lcd content
-    LCDML.FUNC_setLoopInterval(100);  // starts a trigger event for the loop function every 100 millisecounds
-  }
-
-  if(LCDML.FUNC_loop())
-  {
-	LCD_clear();
-	char buf[LCD_COLS+1];
-	snprintf_P(buf, sizeof buf, PSTR("MESSAGE COUNT:  "));
-	print_LCD_line(buf,1, 1);
-	snprintf_P(buf, sizeof buf, PSTR("           %5d"),iMessageCounter);
-	print_LCD_line(buf,2, 1);
-
-    if (LCDML.BT_checkAny()) // check if any button is pressed (enter, up, down, left, right)
-    {      
-      LCDML.FUNC_goBackToMenu();  // leave this function   
-    }
-  } 
-} 
-
 void printBufCurrent(char *buf,int iBufSize, float fCurrent_uA,int iPowerModeVal){
 	//Check range for proper displaying	
 	if (fCurrent_uA > 1000){
@@ -861,165 +783,264 @@ void printBufCurrent(char *buf,int iBufSize, float fCurrent_uA,int iPowerModeVal
 	}
 }
 
-void dispTxRxPower(uint8_t param)
+void menuPage(uint8_t param)
 {
-  (void)param;
   if (LCDML.FUNC_setup())
   {
-    // update lcd content
     LCDML.FUNC_setLoopInterval(100);  // starts a trigger event for the loop function every 100 millisecounds
   }
 
-  if(LCDML.FUNC_loop())
+  if (LCDML.FUNC_loop())
   {
 	LCD_clear();
 	char buf[LCD_COLS+1];
-	printBufCurrent(buf,sizeof buf,TransmitCurrent_uA,1);
-	print_LCD_line(buf,1, 1);		
-	printBufCurrent(buf,sizeof buf,ReceiveCurrent_uA,2);
-	print_LCD_line(buf,2, 1);		
 
+    switch(page(param))
+    {
+      case PAGE_STATISTICS:
+		snprintf_P(buf, sizeof buf, PSTR("P%-3dFAIL%4d%3d%%"), MY_PARENT_NODE_ID, iNrFailedMessages, GetNrOfTrueValuesInArray(bArrayFailedMessages, iMaxNumberOfMessages));
+		print_LCD_line(buf,1, 1);		
+		snprintf_P(buf, sizeof buf, PSTR("D%-3dNACK%4d%3d%%"), iDestinationNode , iNrNAckMessages, GetNrOfTrueValuesInArray(bArrayNAckMessages, iMaxNumberOfMessages));
+		print_LCD_line(buf,2, 1);		
+        break;
+
+      case PAGE_TIMING:
+		if (iMaxDelayFirstHop_ms>9999){
+			snprintf_P(buf, sizeof buf, PSTR("HOP1 dTmax   INF"));
+		} else {
+			snprintf_P(buf, sizeof buf, PSTR("HOP1 dTmax%4dms"),iMaxDelayFirstHop_ms);
+		}
+		print_LCD_line(buf,1, 1);
+		if (iMaxDelayDestination_ms>9999){
+			snprintf_P(buf, sizeof buf, PSTR("D%-3d dTmax   INF"),iDestinationNode,iMaxDelayDestination_ms);
+		} else {
+			snprintf_P(buf, sizeof buf, PSTR("D%-3d dTmax%4dms"),iDestinationNode,iMaxDelayDestination_ms);
+		}
+		print_LCD_line(buf,2, 1);
+        break;
+
+      case PAGE_COUNTERS:
+		snprintf_P(buf, sizeof buf, PSTR("MESSAGE COUNT:  "));
+		print_LCD_line(buf,1, 1);
+		snprintf_P(buf, sizeof buf, PSTR("           %5d"),iMessageCounter);
+		print_LCD_line(buf,2, 1);
+        break;
+
+      case PAGE_TXRXPOWER:
+		printBufCurrent(buf,sizeof buf,TransmitCurrent_uA,1);
+		print_LCD_line(buf,1, 1);		
+		printBufCurrent(buf,sizeof buf,ReceiveCurrent_uA,2);
+		print_LCD_line(buf,2, 1);		
+        break;
+
+      case PAGE_SLEEPPOWER:
+		printBufCurrent(buf,sizeof buf,SleepCurrent_uA,0);
+		print_LCD_line(buf,1, 1);				
+        break;
+
+      default:
+        break;
+    }
+    
     if (LCDML.BT_checkAny()) // check if any button is pressed (enter, up, down, left, right)
     {      
       LCDML.FUNC_goBackToMenu();  // leave this function   
     }
   } 
-} 
 
-void dispSleepPower(uint8_t param)
-{
-  (void)param;
-  if (LCDML.FUNC_setup())
-  {
-    // update lcd content
-    LCDML.FUNC_setLoopInterval(100);  // starts a trigger event for the loop function every 100 millisecounds
+  if(LCDML.FUNC_close())
+  {    
   }
-
-  if(LCDML.FUNC_loop())
-  {
-	LCD_clear();
-	char buf[LCD_COLS+1];
-	printBufCurrent(buf,sizeof buf,SleepCurrent_uA,0);
-	print_LCD_line(buf,1, 1);				
-
-    if (LCDML.BT_checkAny()) // check if any button is pressed (enter, up, down, left, right)
-    {      
-      LCDML.FUNC_goBackToMenu();  // leave this function   
-    }
-  } 
-} 
-
-
-/*****************************************************************/
-/************************ BUTTON FUNCTIONS ***********************/
-/*****************************************************************/
-/*
-
-void onButton1Pressed() {			//Scroll through the menu items
-	LCD_clear();
-	bDspRefresh = true;
-	switch (opState) {
-		case STATE_RUN:
-			opState = STATE_RUN2;
-			break;
-		case STATE_RUN2:
-			opState = STATE_RUN3;
-			break;			
-		case STATE_RUN3:
-			opState = STATE_CURLEVEL_ACTIVE;
-			break;			
-		case STATE_CURLEVEL_ACTIVE:
-			opState = STATE_CURLEVEL_SLEEP;
-			break;
-		case STATE_CURLEVEL_SLEEP:
-			opState = STATE_SET_RESET;
-			break;			
-		case STATE_SET_RESET:
-			opState = STATE_SET_DESTINATION_NODE;
-			break;
-		case STATE_SET_DESTINATION_NODE:
-			opState = STATE_SET_CHANNEL;
-			break;
-		case STATE_SET_CHANNEL:
-			opState = STATE_SET_PALEVEL;
-			break;
-		case STATE_SET_PALEVEL:
-			opState = STATE_SET_PALEVEL_GW;
-			break;
-		case STATE_SET_PALEVEL_GW:
-			opState = STATE_SET_DATARATE;
-			break;		
-		case STATE_SET_DATARATE:
-			opState = STATE_SET_BASE_RADIO_ID;
-			break;
-		case STATE_SET_BASE_RADIO_ID:
-			opState = STATE_ASK_GATEWAY;
-			break;
-		case STATE_ASK_GATEWAY:
-			opState = STATE_UPDATE_GATEWAY;
-			loadNewRadioSettingsGateway();
-			break;
-		case STATE_UPDATE_GATEWAY:
-			loadNewRadioSettingsGateway();
-			break;		
-	}
 }
 
+
+void menuCfgEntry( uint8_t &value )
+{
+	// make only an action when the cursor stands on this menuitem
+	//check Button
+	if (LCDML.BT_checkAny()) 
+	{
+		if (LCDML.BT_checkEnter()) 
+		{
+			// this function checks returns the scroll disable status (0 = menu scrolling enabled, 1 = menu scrolling disabled)
+			if (LCDML.MENU_getScrollDisableStatus() == 0)
+			{
+				// disable the menu scroll function to catch the cursor on this point
+				// now it is possible to work with BT_checkUp and BT_checkDown in this function
+				// this function can only be called in a menu, not in a menu function
+				LCDML.MENU_disScroll();
+			}
+			else
+			{
+				// enable the normal menu scroll function
+				LCDML.MENU_enScroll();
+			}
+			// dosomething for example save the data or something else             
+			LCDML.BT_resetEnter();
+		}
+	}
+	if ((value < 255) and LCDML.BT_checkUp())   value++;        
+	if ((value > 0)   and LCDML.BT_checkDown()) value--;        
+}
+
+void menuCfgChannel(uint8_t line)
+{ 
+	if (line == LCDML.MENU_getCursorPos()) 
+	{
+		menuCfgEntry( iRf24Channel );
+		iRf24Channel = constrain_hi( iRf24Channel, 125 );
+	} 
+
+	char buf[LCD_COLS+1];
+	snprintf_P(buf, sizeof(buf), PSTR("Channel   %d"), iRf24Channel);
+
+	// use the line from function parameters
+	lcd.setCursor(1, line);
+	lcd.print(buf); 
+}
+
+void menuCfgGwNode(uint8_t line)
+{ 
+	if (line == LCDML.MENU_getCursorPos()) 
+	{
+		menuCfgEntry( iDestinationNode );
+	} 
+
+	char buf[LCD_COLS+1];
+	snprintf_P(buf, sizeof(buf), PSTR("GW node   %d"), iDestinationNode);
+
+	// use the line from function parameters
+	lcd.setCursor(1, line);
+	lcd.print(buf); 
+}
+
+
+void menuCfgNodePa(uint8_t line)
+{ 
+	if (line == LCDML.MENU_getCursorPos()) 
+	{
+		menuCfgEntry( iRf24PaLevel );
+		iRf24PaLevel = constrain_hi( iRf24PaLevel, iNrPaLevels-1 );
+	} 
+
+	char buf[LCD_COLS+1];
+	snprintf_P(buf, sizeof(buf), PSTR("Node pa   %s"), pcPaLevelNames[iRf24PaLevel]);
+
+	// use the line from function parameters
+	lcd.setCursor(1, line);
+	lcd.print(buf); 
+}
+
+void menuCfgGwPa(uint8_t line)
+{ 
+	if (line == LCDML.MENU_getCursorPos()) 
+	{
+		menuCfgEntry( iRf24PaLevelGw );
+		iRf24PaLevelGw = constrain_hi( iRf24PaLevelGw, iNrPaLevels-1 );
+	} 
+
+	char buf[LCD_COLS+1];
+	snprintf_P(buf, sizeof(buf), PSTR("GW pa     %s"), pcPaLevelNames[iRf24PaLevelGw]);
+
+	// use the line from function parameters
+	lcd.setCursor(1, line);
+	lcd.print(buf); 
+}
+
+void menuCfgRate(uint8_t line)
+{ 
+	if (line == LCDML.MENU_getCursorPos()) 
+	{
+		menuCfgEntry( iRf24DataRate );
+		iRf24DataRate = constrain_hi( iRf24DataRate, iNrDataRates-1 );
+	} 
+
+	char buf[LCD_COLS+1];
+	snprintf_P(buf, sizeof(buf), PSTR("Datarate  %s"), pcDataRateNames[iRf24DataRate]);
+
+	// use the line from function parameters
+	lcd.setCursor(1, line);
+	lcd.print(buf); 
+}
+
+void menuCfgRadioId(uint8_t line)
+{ 
+	if (line == LCDML.MENU_getCursorPos()) 
+	{
+		menuCfgEntry( iRf24BaseRadioId );
+		iRf24BaseRadioId = constrain_hi( iRf24BaseRadioId, iNrBaseRadioIds-1 );
+		memcpy(RF24_BASE_ID_VAR, RF24_BASE_ID_VARS[iRf24BaseRadioId], sizeof(RF24_BASE_ID_VAR));
+	} 
+
+	char buf[LCD_COLS+1];
+	snprintf_P(buf, sizeof(buf), PSTR("%02X:%0.2X:%0.2X:%0.2X:%0.2X"), RF24_BASE_ID_VAR[0],RF24_BASE_ID_VAR[1],RF24_BASE_ID_VAR[2],RF24_BASE_ID_VAR[3],RF24_BASE_ID_VAR[4]);
+
+	// use the line from function parameters
+	lcd.setCursor(1, line);
+	lcd.print(buf); 
+}
+
+void menuSaveEeprom(__attribute__((unused)) uint8_t param)
+{
+  if (LCDML.FUNC_setup())
+  {
+	// TODO: Start the GW update sequence too!
+	// loadNewRadioSettingsGateway();
+	SaveStatesToEEPROM();
+	LCDML.FUNC_goBackToMenu();
+  } 
+}
+
+void menuLoadEeprom(__attribute__((unused)) uint8_t param)
+{
+  if (LCDML.FUNC_setup())
+  {
+	LoadStatesFromEEPROM();
+	LCDML.FUNC_goBackToMenu();
+  } 
+}
+
+void menuDefaultEeprom(__attribute__((unused)) uint8_t param)
+{
+  if (LCDML.FUNC_setup())
+  {
+	// TODO: Start the GW update sequence too!
+	// TODO: Actually revert to defaults
+//	SaveStatesToEEPROM();
+	LCDML.FUNC_goBackToMenu();
+  } 
+}
+
+void menuResetBuf(__attribute__((unused)) uint8_t param)
+{
+  if (LCDML.FUNC_setup())
+  {
+	ClearStorageAndCounters();
+//  ... Maybe some done message ...
+//	LCD_clear();
+//	char buf[LCD_COLS+1];
+//	print_LCD_line("Done", 1, 1);
+//  wait some time...
+
+	LCDML.FUNC_goBackToMenu();
+  } 
+}
+
+void menuBack(__attribute__((unused)) uint8_t param)
+{
+  if (LCDML.FUNC_setup())
+  {
+    // Go one level up
+	LCDML.FUNC_goBackToMenu(1);
+  } 
+}
+
+/*
 void onButton2Pressed() {	//Apply/Select change (if available). In Viewing windows: toggle (reversed)
 	bDspRefresh = true;
 	switch (opState) {
-		case STATE_RUN:
-			//Do nothing
-			break;
-		case STATE_RUN2:
-			//Do nothing
-			break;
-		case STATE_RUN3:
-			//Do nothing
-			break;			
-		case STATE_CURLEVEL_ACTIVE:
-			//Do nothing
-			break;
-		case STATE_CURLEVEL_SLEEP:
-			//Do nothing
-			break;			
-		case STATE_SET_RESET:
-			ClearStorageAndCounters();
-			opState = STATE_RUN;
-			break;
+		
 		//Select Radio changes:
-		case STATE_SET_DESTINATION_NODE:
-			iDestinationNode++;
-			break;				
-		case STATE_SET_CHANNEL:
-			iRf24Channel++; if (iRf24Channel > 125) iRf24Channel = 0;
-			break;
-		case STATE_SET_PALEVEL:
-			iRf24PaLevel++; if (iRf24PaLevel > (iNrPaLevels-1)) iRf24PaLevel = 0;
-			break;
-		case STATE_SET_PALEVEL_GW:
-			iRf24PaLevelGw++; if (iRf24PaLevelGw > (iNrPaLevels-1)) iRf24PaLevelGw = 0;
-			break;			
-		case STATE_SET_DATARATE:
-			iRf24DataRate++; if (iRf24DataRate > (iNrDataRates-1)) iRf24DataRate = 0;
-			break;			
-		case STATE_SET_BASE_RADIO_ID:
-			iRf24BaseRadioId++; if (iRf24BaseRadioId > iNrBaseRadioIds) iRf24BaseRadioId = 1;
-			switch (iRf24BaseRadioId) {
-				case 1:
-					memcpy(RF24_BASE_ID_VAR,RF24_BASE_ID_VAR1,sizeof(RF24_BASE_ID_VAR));
-					break;
-				case 2:
-					memcpy(RF24_BASE_ID_VAR,RF24_BASE_ID_VAR2,sizeof(RF24_BASE_ID_VAR));
-					break;				
-				case 3:
-					memcpy(RF24_BASE_ID_VAR,RF24_BASE_ID_VAR3,sizeof(RF24_BASE_ID_VAR));
-					break;
-				case 4:
-					memcpy(RF24_BASE_ID_VAR,RF24_BASE_ID_VAR4,sizeof(RF24_BASE_ID_VAR));
-					break;
-			}
-			break;			
 		case STATE_ASK_GATEWAY:
 			bUpdateGateway= !bUpdateGateway;
 			if (bUpdateGateway){
@@ -1035,103 +1056,12 @@ void onButton2Pressed() {	//Apply/Select change (if available). In Viewing windo
 	}
 }
 
-void onButton1LongPressed() {
-	// Return to normal RUN state without changing any settings (recall last set from EEPROM)
-	opState = STATE_RUN;
-	LoadStatesFromEEPROM();
-	bDspRefresh = true;
-}
-
-void onButton2Hold() {	//Scroll through numbers quickly
-	switch (opState) {
-		case STATE_SET_CHANNEL:
-			iRf24Channel++; if (iRf24Channel > 125) iRf24Channel = 0;
-			bDspRefresh = true;
-			break;
-		case STATE_SET_DESTINATION_NODE:
-			iDestinationNode++;
-			bDspRefresh = true;
-			break;
-		default:
-			break;
-	}		
-}
-*/
-
-/*
 void LCD_local_display(void) {
 	static mode prevOpState = STATE_RUN;	//Remember previous state to allow for partial LCD updates
 	char buf[LCD_COLS+1];
 	bDspRefresh = false;
 	
 	switch (opState) {
-
-		case STATE_SET_RESET:
-		{
-			snprintf_P(buf, sizeof buf, PSTR("RESET BUFFERS?"));
-			print_LCD_line(buf,1, 1);
-			break;
-		}	
-		case STATE_SET_DESTINATION_NODE:
-		{
-			if(opState==prevOpState){
-				char buf2[4];		// why not re-use buf?
-				snprintf(buf2, sizeof buf2, "%3d", iDestinationNode);
-				print_LCD_line(buf2, 1, 14);
-			}
-			else{
-				snprintf_P(buf, sizeof buf, PSTR("DEST. NODE = %3d"), iDestinationNode);
-				print_LCD_line(buf, 1, 1);
-			}
-			break;
-		}
-		case STATE_SET_CHANNEL:
-		{
-			if(opState==prevOpState){
-				char buf2[4];		// why not re-use buf?
-				snprintf(buf2, sizeof buf2, "%3d", iRf24Channel);
-				print_LCD_line(buf2, 1, 14);
-			}
-			else{
-				snprintf_P(buf, sizeof buf, PSTR("CHANNEL NR = %3d"), iRf24Channel);
-				print_LCD_line(buf, 1, 1);
-			}
-			break;
-		}
-		case STATE_SET_PALEVEL:
-		{
-			LCD_clear();
-			snprintf_P(buf, sizeof buf, PSTR("NODE"));
-			print_LCD_line(buf, 1, 1);
-			snprintf_P(buf, sizeof buf, PSTR("PA Level = %s"), pcPaLevelNames[iRf24PaLevel]);
-			print_LCD_line(buf, 2, 1);
-			break;
-		}
-		case STATE_SET_PALEVEL_GW:
-		{
-			LCD_clear();
-			snprintf_P(buf, sizeof buf, PSTR("GATEWAY"));
-			print_LCD_line(buf, 1, 1);
-			snprintf_P(buf, sizeof buf, PSTR("PA Level = %s"), pcPaLevelNames[iRf24PaLevelGw]);
-			print_LCD_line(buf, 2, 1);
-			break;
-		}
-		case STATE_SET_DATARATE:
-		{
-			LCD_clear();
-			snprintf_P(buf, sizeof buf, PSTR("DataRate=%s"), pcDataRateNames[iRf24DataRate]);
-			print_LCD_line(buf, 1, 1);
-			break;
-		}
-		case STATE_SET_BASE_RADIO_ID:
-		{
-			LCD_clear();
-			snprintf_P(buf, sizeof buf, PSTR("Base Radio ID=  "));
-			print_LCD_line(buf, 1, 1);
-			snprintf_P(buf, sizeof buf, PSTR("%02X:%0.2X:%0.2X:%0.2X:%0.2X"),RF24_BASE_ID_VAR[0],RF24_BASE_ID_VAR[1],RF24_BASE_ID_VAR[2],RF24_BASE_ID_VAR[3],RF24_BASE_ID_VAR[4]);
-			print_LCD_line(buf, 2, 1);
-			break;
-		}		
 		case STATE_ASK_GATEWAY:
 		{
 			LCD_clear();
