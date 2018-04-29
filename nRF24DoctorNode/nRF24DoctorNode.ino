@@ -1,15 +1,15 @@
 /*
-  PROJECT: 		MySensors nRF24 Doctor
-  PROGRAMMER: 	Technovation & Yveaux
-  DATE: 		2018April18
-  FILE: 		nRF24DoctorNode.ino
+PROJECT: 		MySensors nRF24 Doctor
+PROGRAMMER: 	Technovation & Yveaux
+DATE: 		2018April18
+FILE: 		nRF24DoctorNode.ino
 
-  Hardware: 	ATMega328p board
-  MySensorsAPI: 2.2.0
+Hardware: 	ATMega328p board
+MySensorsAPI: 2.2.0
 
-  Summary:  	a portable nRF24 Radio Doctor to diagnose module performance
+Summary:  	a portable nRF24 Radio Doctor to diagnose module performance
 
-  Change log:
+Change log:
 	2018/03/27	New Release, based on: https://forum.mysensors.org/topic/3984/nrf24l01-connection-quality-meter
 	2018/04/13	Fixed some bugs in Current Measurement & display of currents
 	2018/04/17	Added support for TFT_ILI9163C display
@@ -31,10 +31,10 @@
 
 #ifdef LOCAL_DEBUG
 #define Sprint(a) (Serial.print(a))           	// macro as substitute for print, enable if no print wanted
-#define Sprintln(a) (Serial.println(a))         
+#define Sprintln(a) (Serial.println(a))
 #else											// macro for "no" debug print
-#define Sprint(a)                   			
-#define Sprintln(a)                   			
+#define Sprint(a)
+#define Sprintln(a)
 #endif
 
 //**** MySensors *****
@@ -77,12 +77,12 @@
 	#define GREEN           (0x07E0)
 	#define CYAN            (0x07FF)
 	#define MAGENTA         (0xF81F)
-	#define YELLOW          (0xFFE0) 
+	#define YELLOW          (0xFFE0)
 
 	#define COLOR_BG        (BLACK)
-	#define COLOR_TEXT      (WHITE) 
-	#define COLOR_UNIT      (CYAN) 
-	#define COLOR_SETACT    (RED) 
+	#define COLOR_TEXT      (WHITE)
+	#define COLOR_UNIT      (CYAN)
+	#define COLOR_SETACT    (RED)
 
 	#define TFT_WIDTH       (128)
 	#define TFT_HEIGHT      (128)
@@ -96,7 +96,7 @@
 
 	#define TEXT_HEIGHT(c)  ((c)*CHAR_HEIGHT)
 	#define TEXT_WIDTH(c)   ((c)*CHAR_WIDTH)
-	  
+
 	#define TFT_PIN_CS      (8)
 	#define TFT_PIN_DC      (7)
 	static TFT_ILI9163C tft(TFT_PIN_CS, TFT_PIN_DC);
@@ -113,15 +113,15 @@
 #ifdef CHARACTER_DISPLAY
 const uint8_t scroll_bar[][8] = {
 	{B10001, B10001, B10001, B10001, B10001, B10001, B10001, B10001}, // scrollbar top
-	{B11111, B11111, B10001, B10001, B10001, B10001, B10001, B10001}, // scroll state 1 
+	{B11111, B11111, B10001, B10001, B10001, B10001, B10001, B10001}, // scroll state 1
 	{B10001, B10001, B11111, B11111, B10001, B10001, B10001, B10001}, // scroll state 2
 	{B10001, B10001, B10001, B10001, B11111, B11111, B10001, B10001}, // scroll state 3
 	{B10001, B10001, B10001, B10001, B10001, B10001, B11111, B11111}  // scrollbar bottom
 }; 
 #endif
 
-void lcdml_menu_display(); 
-void lcdml_menu_clear(); 
+void lcdml_menu_display();
+void lcdml_menu_clear();
 void lcdml_menu_control();
 
 static LCDMenuLib2_menu LCDML_0 (255, 0, 0, NULL, NULL); // root menu element (do not change)
@@ -202,7 +202,7 @@ const char *pcDataRateNames[] = { "1MBPS", "2MBPS" , "250KBPS"};
 //Define your available RF24_BASE_ID 
 uint8_t RF24_BASE_ID_VAR[MY_RF24_ADDR_WIDTH] = { 0x00,0xFC,0xE1,0xA8,0xA8 };		//Used to Store the active BASE_ID
 const uint8_t RF24_BASE_ID_VARS[][MY_RF24_ADDR_WIDTH] = {
-	  { 0x00,0xFC,0xE1,0xA8,0xA8 }
+	{ 0x00,0xFC,0xE1,0xA8,0xA8 }
 	, { 0x00,0xA1,0xF3,0x09,0xB6 }
 	, { 0x00,0xAA,0xA5,0xC4,0xD9 }
 	, { 0x00,0xB1,0x47,0xEE,0x82 }
@@ -262,44 +262,43 @@ const char *pcGatewayRetryNames[iNrGatwayRetryOptions] = { "SKIP GATEWAY", "RETR
 /*****************************************************************************/
 /******************************* ENCODER & BUTTON ****************************/
 /*****************************************************************************/
-
 void lcdml_menu_control(void)
 {
-  if (LCDML.BT_setup()) 
-  {
-    // run once; init pins & debouncer
-    pinMode(ENCODER_A_PIN      , INPUT_PULLUP);
-    pinMode(ENCODER_B_PIN      , INPUT_PULLUP);
-    pinMode(BUTTON_PIN , INPUT_PULLUP); 
-	button.attach(BUTTON_PIN);
-	button.interval(5); // interval in ms
-  }
-  
-  const int8_t encStep = 4;
-  const int8_t enc = int8_t(encoder.read());
-  button.update();
-  const bool pressed = button.read() == LOW;
-  static bool prevPressed = false;
-
-  if (enc <= (-encStep + 1) )
-  {
-    LCDML.BT_down();
-    encoder.write(enc + encStep);
-  }  
-  else if (enc >= (encStep - 1))
-  {
-    LCDML.BT_up();
-    encoder.write(enc - encStep);
-  }  
-  else 
-  {
-	if (pressed and (not prevPressed))
+	if (LCDML.BT_setup()) 
 	{
-		// Pressed and previously not pressed
-		LCDML.BT_enter();  
+		// run once; init pins & debouncer
+		pinMode(ENCODER_A_PIN      , INPUT_PULLUP);
+		pinMode(ENCODER_B_PIN      , INPUT_PULLUP);
+		pinMode(BUTTON_PIN , INPUT_PULLUP); 
+		button.attach(BUTTON_PIN);
+		button.interval(5); // interval in ms
 	}
-	prevPressed = pressed;
-  }
+
+	const int8_t encStep = 4;
+	const int8_t enc = int8_t(encoder.read());
+	button.update();
+	const bool pressed = button.read() == LOW;
+	static bool prevPressed = false;
+
+	if (enc <= (-encStep + 1) )
+	{
+		LCDML.BT_down();
+		encoder.write(enc + encStep);
+	}  
+	else if (enc >= (encStep - 1))
+	{
+		LCDML.BT_up();
+		encoder.write(enc - encStep);
+	}  
+	else 
+	{
+		if (pressed and (not prevPressed))
+		{
+			// Pressed and previously not pressed
+			LCDML.BT_enter();  
+		}
+		prevPressed = pressed;
+	}
 }
 
 /*****************************************************************************/
@@ -362,8 +361,8 @@ void before() {						//Initialization before the MySensors library starts up
 
 	//**** ADC SETUP ****
 	ADCSRA =  bit (ADEN);                      				// turn ADC on
-  	ADCSRA |= bit (ADPS2);                               	// Prescaler of 16: To get sufficient samples in Tx Current Measurement 
-  	ADMUX  =  bit (REFS0) | bit (REFS1) | (adcPin & 0x07);  // ARef internal and select input port
+	ADCSRA |= bit (ADPS2);                               	// Prescaler of 16: To get sufficient samples in Tx Current Measurement 
+	ADMUX  =  bit (REFS0) | bit (REFS1) | (adcPin & 0x07);  // ARef internal and select input port
 
 	//****  LCD *****
 	#ifdef CHARACTER_DISPLAY
@@ -380,8 +379,8 @@ void before() {						//Initialization before the MySensors library starts up
 	#else
 		tft.begin();
 		tft.setRotation(1);
-      	tft.setTextColor(COLOR_TEXT, COLOR_BG);
-      	tft.setTextSize(TEXT_SIZE);
+		tft.setTextColor(COLOR_TEXT, COLOR_BG);
+		tft.setTextSize(TEXT_SIZE);
 	#endif
 
 
@@ -404,8 +403,8 @@ void setup() {
 	loadNewRadioSettings();	//Load the Radio Settings as they are stored in EEPROM
 
 	//**** MENU *****
-    LCDML_setup(_LCDML_DISP_cnt);
-    LCDML.SCREEN_disable();
+	LCDML_setup(_LCDML_DISP_cnt);
+	LCDML.SCREEN_disable();
 }
 
 void presentation() {
@@ -418,14 +417,13 @@ void presentation() {
 /*****************************************************************************/
 void loop()
 {
-    LCDML.loop();  
+	LCDML.loop();  
 	statemachine();
 }
 
 /*****************************************************************************/
 /********************* TRANSMIT & MEASUREMENT STATEMACHINE *******************/
 /*****************************************************************************/
-
 enum state { STATE_IDLE, STATE_TX, STATE_TX_WAIT, STATE_SLEEP };
 static state currState = STATE_IDLE;
 static bool transmitAcive = true;
@@ -524,7 +522,7 @@ void receive(const MyMessage &message) {
 		uint16_t iIndexInArray = iNewMessage % iMaxNumberOfMessages;
 		bArrayNAckMessages[iIndexInArray] = 0; 			// set corresponding flag to received.
 		
-		//Check Message (Round trip) Delay
+		// Check Message (Round trip) Delay
 		uint8_t iIndexInTimeArray = IndexOfValueInArray(iNewMessage, iMessageIndexBuffer, iNrTimeDelays); //Look-up if message is present in MessageIndexBuffer for delay calculation
 		if ((iIndexInTimeArray != 255) && iIndexInTimeArray <=iNrTimeDelays){
 			lTimeDelayBuffer_Destination_us[iIndexInTimeArray] = micros()-lTimeOfTransmit_us[iIndexInTimeArray];
@@ -532,7 +530,7 @@ void receive(const MyMessage &message) {
 		iNrNAckMessages--;	//Received an Acknowledge Message (so one less No Ack)
 	}
 	
-	//Gateway Update Acknowledge - if we have received this we can "safely" apply the new settings to this node
+	// Gateway Update Acknowledge - if we have received this we can "safely" apply the new settings to this node
 	if (message.isAck() == 1 && message.type == V_CUSTOM && message.sensor==CHILD_ID_UPDATE_GATEWAY){	//Acknowledge message & of correct type & Sensor
 		bAckGatewayUpdate = 1;
 	}
@@ -543,19 +541,20 @@ void transmit() {
 	static int iIndexInArrayTimeMessages  = 0 ;	
 
 	iMessageCounter++;
-	//Cyclic Index counters of arrays
+	// Cyclic Index counters of arrays
 	iIndexInArrayFailedMessages = iMessageCounter % iMaxNumberOfMessages;
 	iIndexInArrayTimeMessages 	= iMessageCounter % iNrTimeDelays;
 
 	bArrayNAckMessages[iIndexInArrayFailedMessages] = 1; 			// set corresponding flag to "Not Received Yet"
 
-	//Prepare time stamp logging for transmit
+	// Prepare time stamp logging for transmit
 	lTimeDelayBuffer_Destination_us[iIndexInArrayTimeMessages] = 0; 		// Clear Buffer value, new value will be written when message is received
 	iMessageIndexBuffer[iIndexInArrayTimeMessages]=iMessageCounter;		// To link the Time Stamp to the correct message when we receive the acknowledge
 	iNrNAckMessages++;													// Add one to the Not Acknowledged Message counter and remove it again if/when it is received.
 	lTimeOfTransmit_us[iIndexInArrayTimeMessages] = micros();
 	
-	//Transmit message with software ack request (returned in "receive function"), the boolean returned here is a Hardware hop-to-hop Ack
+	// Transmit message with software ack request (returned in "receive function"),
+	// the boolean returned here is a Hardware hop-to-hop Ack
 	boolean success = send(MsgCounter.setDestination(iDestinationNode).set(iMessageCounter), true);
 	if (!success) {
 		lTimeDelayBuffer_FirstHop_us[iIndexInArrayTimeMessages] = 0;	//It failed, so I can't use it to determine a First Hop Delay (i.e. it is "infinite" delay as it failed)
@@ -583,7 +582,7 @@ void loadNewRadioSettings() {
 	
 	RF24_BASE_ID_VAR[0] = RF24_BROADCAST_ADDRESS;
 	RF24_setPipeAddress(RF24_REG_RX_ADDR_P0 + RF24_BROADCAST_PIPE, (uint8_t*)&RF24_BASE_ID_VAR,
-	                    RF24_BROADCAST_PIPE > 1 ? 1 : MY_RF24_ADDR_WIDTH);
+						RF24_BROADCAST_PIPE > 1 ? 1 : MY_RF24_ADDR_WIDTH);
 	RF24_setPipeAddress(RF24_REG_RX_ADDR_P0, (uint8_t*)&RF24_BASE_ID_VAR, MY_RF24_ADDR_WIDTH);
 	RF24_setPipeAddress(RF24_REG_TX_ADDR, (uint8_t*)&RF24_BASE_ID_VAR, MY_RF24_ADDR_WIDTH);
 	
@@ -626,7 +625,7 @@ void loadNewRadioSettingsGateway() {
 		case 2:	//Cancel All
 // TODO			opState = STATE_RUN;
 			LoadStatesFromEEPROM();
-//			bDspRefresh = true;					
+//			bDspRefresh = true;
 			break;
 	}
 }
@@ -662,12 +661,12 @@ void SaveStatesToEEPROM() {
 uint8_t IndexOfValueInArray(uint16_t val, uint16_t *array, uint8_t size){
 	// Find the (first) array element which equals val and return the index.
 	// If val not found in the array return 255
-    for (int i=0; i < size; i++) {
-        if (array[i] == val){
+	for (int i=0; i < size; i++) {
+		if (array[i] == val){
 			return i;
 		}
-    }
-    return 255;	//Not Found
+	}
+	return 255;	//Not Found
 }
 
 int GetNrOfTrueValuesInArray(boolean countArray[], int size) {
@@ -779,72 +778,72 @@ void printBufCurrent(char *buf, int iBufSize, float fCurrent_uA, const char* lab
 
 void menuPage(uint8_t param)
 {
-  if (LCDML.FUNC_setup())
-  {
-    LCDML.FUNC_setLoopInterval(100);  // starts a trigger event for the loop function every 100 millisecounds
-  }
+	if (LCDML.FUNC_setup())
+	{
+		LCDML.FUNC_setLoopInterval(100);  // starts a trigger event for the loop function every 100 millisecounds
+	}
 
-  if (LCDML.FUNC_loop())
-  {
-	LCD_clear();
-	char buf[LCD_COLS+1];
+	if (LCDML.FUNC_loop())
+	{
+		LCD_clear();
+		char buf[LCD_COLS+1];
 
-    switch(page(param))
-    {
-      case PAGE_STATISTICS:
-		snprintf_P(buf, sizeof(buf), PSTR("P%-3dFAIL%4d%3d%%"), MY_PARENT_NODE_ID, iNrFailedMessages, GetNrOfTrueValuesInArray(bArrayFailedMessages, iMaxNumberOfMessages));
-		print_LCD_line(buf, 0, 0);		
-		snprintf_P(buf, sizeof(buf), PSTR("D%-3dNACK%4d%3d%%"), iDestinationNode , iNrNAckMessages, GetNrOfTrueValuesInArray(bArrayNAckMessages, iMaxNumberOfMessages));
-		print_LCD_line(buf, 1, 0);		
-        break;
+		switch(page(param))
+		{
+		case PAGE_STATISTICS:
+			snprintf_P(buf, sizeof(buf), PSTR("P%-3dFAIL%4d%3d%%"), MY_PARENT_NODE_ID, iNrFailedMessages, GetNrOfTrueValuesInArray(bArrayFailedMessages, iMaxNumberOfMessages));
+			print_LCD_line(buf, 0, 0);
+			snprintf_P(buf, sizeof(buf), PSTR("D%-3dNACK%4d%3d%%"), iDestinationNode , iNrNAckMessages, GetNrOfTrueValuesInArray(bArrayNAckMessages, iMaxNumberOfMessages));
+			print_LCD_line(buf, 1, 0);
+			break;
 
-      case PAGE_TIMING:
-		if (iMaxDelayFirstHop_ms>9999){
-			snprintf_P(buf, sizeof(buf), PSTR("HOP1 dTmax   INF"));
-		} else {
-			snprintf_P(buf, sizeof(buf), PSTR("HOP1 dTmax%4dms"),iMaxDelayFirstHop_ms);
+		case PAGE_TIMING:
+			if (iMaxDelayFirstHop_ms>9999){
+				snprintf_P(buf, sizeof(buf), PSTR("HOP1 dTmax   INF"));
+			} else {
+				snprintf_P(buf, sizeof(buf), PSTR("HOP1 dTmax%4dms"),iMaxDelayFirstHop_ms);
+			}
+			print_LCD_line(buf, 0, 0);
+			if (iMaxDelayDestination_ms>9999){
+				snprintf_P(buf, sizeof(buf), PSTR("D%-3d dTmax   INF"),iDestinationNode,iMaxDelayDestination_ms);
+			} else {
+				snprintf_P(buf, sizeof(buf), PSTR("D%-3d dTmax%4dms"),iDestinationNode,iMaxDelayDestination_ms);
+			}
+			print_LCD_line(buf, 1, 0);
+			break;
+
+		case PAGE_COUNTERS:
+			snprintf_P(buf, sizeof(buf), PSTR("MESSAGE COUNT:  "));
+			print_LCD_line(buf, 0, 0);
+			snprintf_P(buf, sizeof(buf), PSTR("           %5d"),iMessageCounter);
+			print_LCD_line(buf, 1, 0);
+			break;
+
+		case PAGE_TXRXPOWER:
+			printBufCurrent(buf,sizeof(buf), TransmitCurrent_uA, "TX");
+			print_LCD_line(buf, 0, 0);
+			printBufCurrent(buf,sizeof(buf), ReceiveCurrent_uA, "RX");
+			print_LCD_line(buf, 1, 0);
+			break;
+
+		case PAGE_SLEEPPOWER:
+			printBufCurrent(buf,sizeof(buf), SleepCurrent_uA, "SLEEP");
+			print_LCD_line(buf, 0, 0);
+			break;
+
+		default:
+			break;
 		}
-		print_LCD_line(buf, 0, 0);
-		if (iMaxDelayDestination_ms>9999){
-			snprintf_P(buf, sizeof(buf), PSTR("D%-3d dTmax   INF"),iDestinationNode,iMaxDelayDestination_ms);
-		} else {
-			snprintf_P(buf, sizeof(buf), PSTR("D%-3d dTmax%4dms"),iDestinationNode,iMaxDelayDestination_ms);
+
+		if (LCDML.BT_checkAny()) // check if any button is pressed (enter, up, down, left, right)
+		{      
+			LCDML.FUNC_goBackToMenu();  // leave this function
 		}
-		print_LCD_line(buf, 1, 0);
-        break;
+	} 
 
-      case PAGE_COUNTERS:
-		snprintf_P(buf, sizeof(buf), PSTR("MESSAGE COUNT:  "));
-		print_LCD_line(buf, 0, 0);
-		snprintf_P(buf, sizeof(buf), PSTR("           %5d"),iMessageCounter);
-		print_LCD_line(buf, 1, 0);
-        break;
-
-      case PAGE_TXRXPOWER:
-		printBufCurrent(buf,sizeof(buf), TransmitCurrent_uA, "TX");
-		print_LCD_line(buf, 0, 0);		
-		printBufCurrent(buf,sizeof(buf), ReceiveCurrent_uA, "RX");
-		print_LCD_line(buf, 1, 0);		
-        break;
-
-      case PAGE_SLEEPPOWER:
-		printBufCurrent(buf,sizeof(buf), SleepCurrent_uA, "SLEEP");
-		print_LCD_line(buf, 0, 0);				
-        break;
-
-      default:
-        break;
-    }
-
-    if (LCDML.BT_checkAny()) // check if any button is pressed (enter, up, down, left, right)
-    {      
-      LCDML.FUNC_goBackToMenu();  // leave this function   
-    }
-  } 
-
-  if(LCDML.FUNC_close())
-  {    
-  }
+	if(LCDML.FUNC_close())
+	{    
+	}
 }
 
 
@@ -869,12 +868,12 @@ void menuCfgEntry( uint8_t &value )
 				// enable the normal menu scroll function
 				LCDML.MENU_enScroll();
 			}
-			// dosomething for example save the data or something else             
+			// dosomething for example save the data or something else
 			LCDML.BT_resetEnter();
 		}
 	}
-	if ((value < 255) and LCDML.BT_checkUp())   value++;        
-	if ((value > 0)   and LCDML.BT_checkDown()) value--;        
+	if ((value < 255) and LCDML.BT_checkUp())   value++;
+	if ((value > 0)   and LCDML.BT_checkDown()) value--;
 }
 
 void menuCfgChannel(uint8_t line)
@@ -954,7 +953,7 @@ void menuCfgRate(uint8_t line)
 
 	// use the line from function parameters
 	lcd.setCursor(1, line);
-	lcd.print(buf); 
+	lcd.print(buf);
 }
 
 void menuCfgRadioId(uint8_t line)
@@ -976,57 +975,57 @@ void menuCfgRadioId(uint8_t line)
 
 void menuSaveEeprom(__attribute__((unused)) uint8_t param)
 {
-  if (LCDML.FUNC_setup())
-  {
-	// TODO: Start the GW update sequence too!
-	// loadNewRadioSettingsGateway();
-	SaveStatesToEEPROM();
-	LCDML.FUNC_goBackToMenu();
-  } 
+	if (LCDML.FUNC_setup())
+	{
+		// TODO: Start the GW update sequence too!
+		// loadNewRadioSettingsGateway();
+		SaveStatesToEEPROM();
+		LCDML.FUNC_goBackToMenu();
+	} 
 }
 
 void menuLoadEeprom(__attribute__((unused)) uint8_t param)
 {
-  if (LCDML.FUNC_setup())
-  {
-	LoadStatesFromEEPROM();
-	LCDML.FUNC_goBackToMenu();
-  } 
+	if (LCDML.FUNC_setup())
+	{
+		LoadStatesFromEEPROM();
+		LCDML.FUNC_goBackToMenu();
+	} 
 }
 
 void menuDefaultEeprom(__attribute__((unused)) uint8_t param)
 {
-  if (LCDML.FUNC_setup())
-  {
-	// TODO: Start the GW update sequence too!
-	// TODO: Actually revert to defaults
-//	SaveStatesToEEPROM();
-	LCDML.FUNC_goBackToMenu();
-  } 
+	if (LCDML.FUNC_setup())
+	{
+		// TODO: Start the GW update sequence too!
+		// TODO: Actually revert to defaults
+	//	SaveStatesToEEPROM();
+		LCDML.FUNC_goBackToMenu();
+	} 
 }
 
 void menuResetBuf(__attribute__((unused)) uint8_t param)
 {
-  if (LCDML.FUNC_setup())
-  {
-	ClearStorageAndCounters();
+	if (LCDML.FUNC_setup())
+	{
+		ClearStorageAndCounters();
 //  ... Maybe some done message ...
 //	LCD_clear();
 //	char buf[LCD_COLS+1];
 //	print_LCD_line("Done", 0, 0);
 //  wait some time...
 
-	LCDML.FUNC_goBackToMenu();
-  } 
+		LCDML.FUNC_goBackToMenu();
+	} 
 }
 
 void menuBack(__attribute__((unused)) uint8_t param)
 {
-  if (LCDML.FUNC_setup())
-  {
-    // Go one level up
-	LCDML.FUNC_goBackToMenu(1);
-  } 
+	if (LCDML.FUNC_setup())
+	{
+		// Go one level up
+		LCDML.FUNC_goBackToMenu(1);
+	} 
 }
 
 /*
