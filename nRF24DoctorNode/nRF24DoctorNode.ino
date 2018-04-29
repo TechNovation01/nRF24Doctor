@@ -111,7 +111,7 @@
 #define _LCDML_DISP_cfg_scrollbar    1      // enable a scrollbar
 
 #ifdef CHARACTER_DISPLAY
-const uint8_t scroll_bar[5][8] = {
+const uint8_t scroll_bar[][8] = {
 	{B10001, B10001, B10001, B10001, B10001, B10001, B10001, B10001}, // scrollbar top
 	{B11111, B11111, B10001, B10001, B10001, B10001, B10001, B10001}, // scroll state 1 
 	{B10001, B10001, B11111, B11111, B10001, B10001, B10001, B10001}, // scroll state 2
@@ -196,14 +196,11 @@ uint16_t iNrNAckMessages = 0;              							// total of Not Acknowledged M
 uint16_t iMessageCounter = 0;
 
 //nRF24 Settings
-const uint8_t iNrPaLevels = 4;
-const char *pcPaLevelNames[iNrPaLevels]   = { "MIN", "LOW", "HIGH", "MAX" };
-const uint8_t iNrDataRates = 3;
-const char *pcDataRateNames[iNrDataRates] = { "1MBPS", "2MBPS" , "250KBPS"};
+const char *pcPaLevelNames[]  = { "MIN", "LOW", "HIGH", "MAX" };
+const char *pcDataRateNames[] = { "1MBPS", "2MBPS" , "250KBPS"};
 
 //Define your available RF24_BASE_ID 
-const uint8_t iNrBaseRadioIds = 4;
-uint8_t RF24_BASE_ID_VAR[MY_RF24_ADDR_WIDTH]				= { 0x00,0xFC,0xE1,0xA8,0xA8 };		//Used to Store the active BASE_ID
+uint8_t RF24_BASE_ID_VAR[MY_RF24_ADDR_WIDTH] = { 0x00,0xFC,0xE1,0xA8,0xA8 };		//Used to Store the active BASE_ID
 const uint8_t RF24_BASE_ID_VARS[][MY_RF24_ADDR_WIDTH] = {
 	  { 0x00,0xFC,0xE1,0xA8,0xA8 }
 	, { 0x00,0xA1,0xF3,0x09,0xB6 }
@@ -221,10 +218,10 @@ uint8_t iDestinationNode	= DESTINATION_NODE;
 
 //**** Timing ****
 const uint8_t iNrTimeDelays = 10;
-uint16_t iMessageIndexBuffer[iNrTimeDelays]={0};
-unsigned long lTimeOfTransmit_us[iNrTimeDelays]={0};
-unsigned long lTimeDelayBuffer_Destination_us[iNrTimeDelays]={0};
-unsigned long lTimeDelayBuffer_FirstHop_us[iNrTimeDelays]={0};
+uint16_t iMessageIndexBuffer[iNrTimeDelays];
+unsigned long lTimeOfTransmit_us[iNrTimeDelays];
+unsigned long lTimeDelayBuffer_Destination_us[iNrTimeDelays];
+unsigned long lTimeDelayBuffer_FirstHop_us[iNrTimeDelays];
 uint16_t iMeanDelayFirstHop_ms = 0;
 uint16_t iMaxDelayFirstHop_ms = 0;
 uint16_t iMeanDelayDestination_ms = 0;
@@ -232,8 +229,6 @@ uint16_t iMaxDelayDestination_ms = 0;
 
 //**** Current Measurement ****
 const uint8_t iNrCurrentMeasurements 	= 60;	//Nr of measurements for averaging current. <64 to prevent risk of overflow of iAdcSum
-const uint8_t iNrPowerModes = 3;
-const char *pcPowerModeNames[iNrPowerModes] = { "SLEEP", "TX", "RX" };
 
 const float r1_ohm    = 2.2;
 const float r2_ohm    = 100.0;
@@ -261,7 +256,8 @@ bool bAckGatewayUpdate 	= 0;
 const uint8_t iNrGatwayRetryOptions = 3;
 const char *pcGatewayRetryNames[iNrGatwayRetryOptions] = { "SKIP GATEWAY", "RETRY GATEWAY" , "CANCEL ALL"};
 
-#define constrain_hi(amt,high) ((amt)>(high)?(high):(amt))
+#define COUNT_OF(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
+#define CONSTRAIN_HI(amt,high) ((amt)>(high)?(high):(amt))
 
 /*****************************************************************************/
 /******************************* ENCODER & BUTTON ****************************/
@@ -594,8 +590,8 @@ void loadNewRadioSettings() {
 	RF24_BASE_ID_VAR[0] = iTempVar0;
 	
 	LCD_clear();
-	print_LCD_line("nRF24 DOCTOR",  1, 1);
-	print_LCD_line("Connecting...", 2, 1);
+	print_LCD_line("nRF24 DOCTOR",  0, 0);
+	print_LCD_line("Connecting...", 1, 0);
 	Sprintln(F("Connecting..."));
 	transportWaitUntilReady(10000);		// Give it 10[s] to connect, else continue to allow user to set new connection settings
 	Sprintln(F("Done"));
@@ -644,7 +640,7 @@ void LoadStatesFromEEPROM() {
 	iRf24DataRate 		= loadState(EEPROM_DATARATE);
 	iRf24BaseRadioId	= loadState(EEPROM_BASE_RADIO_ID);
 	iDestinationNode 	= loadState(EEPROM_DESTINATION_NODE);
-	if (iRf24BaseRadioId < iNrBaseRadioIds)
+	if (iRf24BaseRadioId < COUNT_OF(RF24_BASE_ID_VARS))
 	{
 		memcpy(RF24_BASE_ID_VAR, RF24_BASE_ID_VARS[iRf24BaseRadioId], sizeof(RF24_BASE_ID_VAR));
 	}
@@ -732,8 +728,6 @@ float GetAvgADCBits(int iNrSamples) {
 /*****************************************************************/
 
 void print_LCD_line(const char *string, int row, int col) {
-	col--;
-	row--;
 #ifdef CHARACTER_DISPLAY
 	lcd.setCursor(col,row);
 	lcd.print(string);
@@ -754,32 +748,32 @@ void LCD_clear() {
 /*****************************************************************/
 /************************* MENU HANDLERS *************************/
 /*****************************************************************/
-void printBufCurrent(char *buf,int iBufSize, float fCurrent_uA,int iPowerModeVal){
+void printBufCurrent(char *buf, int iBufSize, float fCurrent_uA, const char* label) {
 	//Check range for proper displaying	
 	if (fCurrent_uA > 1000){
 		int Current_mA = (int)(fCurrent_uA/1000);
 		if (Current_mA>=300){
-			snprintf_P(buf, iBufSize, PSTR("%s[mA]= ERR"),pcPowerModeNames[iPowerModeVal]);
+			snprintf_P(buf, iBufSize, PSTR("%s[mA]= ERR"), label);
 		}
 		else if (Current_mA>=100){
-			snprintf_P(buf, iBufSize, PSTR("%s[mA]=%4d"),pcPowerModeNames[iPowerModeVal],Current_mA);
+			snprintf_P(buf, iBufSize, PSTR("%s[mA]=%4d"), label, Current_mA);
 		}
 		else if (Current_mA>=10){
 			int iDecCurrent = (int)(((fCurrent_uA/1000)-(float)Current_mA)*10+0.5);if (iDecCurrent>=10){iDecCurrent=iDecCurrent-10;Current_mA +=1;}
-			snprintf_P(buf, iBufSize, PSTR("%s[mA]=%2d.%1d"),pcPowerModeNames[iPowerModeVal],Current_mA,iDecCurrent);
+			snprintf_P(buf, iBufSize, PSTR("%s[mA]=%2d.%1d"), label, Current_mA, iDecCurrent);
 		}
 		else {				
 			int iDecCurrent = (int)(((fCurrent_uA/1000)-(float)Current_mA)*100+0.5);if (iDecCurrent >=100){iDecCurrent=iDecCurrent-100;Current_mA +=1;}
-			snprintf_P(buf, iBufSize, PSTR("%s[mA]=%1d.%02d"),pcPowerModeNames[iPowerModeVal],Current_mA,iDecCurrent);
+			snprintf_P(buf, iBufSize, PSTR("%s[mA]=%1d.%02d"), label, Current_mA, iDecCurrent);
 		}
 	}
 	else if (fCurrent_uA < 100){		
 		int iCurrent_uA = (int)fCurrent_uA;
 		int iDecCurrent_uA = (int)((fCurrent_uA-(float)iCurrent_uA)*10+0.5); if (iDecCurrent_uA >= 10){iDecCurrent_uA=iDecCurrent_uA-10;iCurrent_uA +=1;}
-			snprintf_P(buf, iBufSize, PSTR("%s[uA]=%2d.%1d"),pcPowerModeNames[iPowerModeVal],iCurrent_uA,iDecCurrent_uA);
+			snprintf_P(buf, iBufSize, PSTR("%s[uA]=%2d.%1d"), label, iCurrent_uA, iDecCurrent_uA);
 		}
 	else{
-		snprintf_P(buf, iBufSize, PSTR("%s[uA]=%4d"),pcPowerModeNames[iPowerModeVal],(int)fCurrent_uA);
+		snprintf_P(buf, iBufSize, PSTR("%s[uA]=%4d"), label, (int)fCurrent_uA);
 	}
 }
 
@@ -798,50 +792,50 @@ void menuPage(uint8_t param)
     switch(page(param))
     {
       case PAGE_STATISTICS:
-		snprintf_P(buf, sizeof buf, PSTR("P%-3dFAIL%4d%3d%%"), MY_PARENT_NODE_ID, iNrFailedMessages, GetNrOfTrueValuesInArray(bArrayFailedMessages, iMaxNumberOfMessages));
-		print_LCD_line(buf,1, 1);		
-		snprintf_P(buf, sizeof buf, PSTR("D%-3dNACK%4d%3d%%"), iDestinationNode , iNrNAckMessages, GetNrOfTrueValuesInArray(bArrayNAckMessages, iMaxNumberOfMessages));
-		print_LCD_line(buf,2, 1);		
+		snprintf_P(buf, sizeof(buf), PSTR("P%-3dFAIL%4d%3d%%"), MY_PARENT_NODE_ID, iNrFailedMessages, GetNrOfTrueValuesInArray(bArrayFailedMessages, iMaxNumberOfMessages));
+		print_LCD_line(buf, 0, 0);		
+		snprintf_P(buf, sizeof(buf), PSTR("D%-3dNACK%4d%3d%%"), iDestinationNode , iNrNAckMessages, GetNrOfTrueValuesInArray(bArrayNAckMessages, iMaxNumberOfMessages));
+		print_LCD_line(buf, 1, 0);		
         break;
 
       case PAGE_TIMING:
 		if (iMaxDelayFirstHop_ms>9999){
-			snprintf_P(buf, sizeof buf, PSTR("HOP1 dTmax   INF"));
+			snprintf_P(buf, sizeof(buf), PSTR("HOP1 dTmax   INF"));
 		} else {
-			snprintf_P(buf, sizeof buf, PSTR("HOP1 dTmax%4dms"),iMaxDelayFirstHop_ms);
+			snprintf_P(buf, sizeof(buf), PSTR("HOP1 dTmax%4dms"),iMaxDelayFirstHop_ms);
 		}
-		print_LCD_line(buf,1, 1);
+		print_LCD_line(buf, 0, 0);
 		if (iMaxDelayDestination_ms>9999){
-			snprintf_P(buf, sizeof buf, PSTR("D%-3d dTmax   INF"),iDestinationNode,iMaxDelayDestination_ms);
+			snprintf_P(buf, sizeof(buf), PSTR("D%-3d dTmax   INF"),iDestinationNode,iMaxDelayDestination_ms);
 		} else {
-			snprintf_P(buf, sizeof buf, PSTR("D%-3d dTmax%4dms"),iDestinationNode,iMaxDelayDestination_ms);
+			snprintf_P(buf, sizeof(buf), PSTR("D%-3d dTmax%4dms"),iDestinationNode,iMaxDelayDestination_ms);
 		}
-		print_LCD_line(buf,2, 1);
+		print_LCD_line(buf, 1, 0);
         break;
 
       case PAGE_COUNTERS:
-		snprintf_P(buf, sizeof buf, PSTR("MESSAGE COUNT:  "));
-		print_LCD_line(buf,1, 1);
-		snprintf_P(buf, sizeof buf, PSTR("           %5d"),iMessageCounter);
-		print_LCD_line(buf,2, 1);
+		snprintf_P(buf, sizeof(buf), PSTR("MESSAGE COUNT:  "));
+		print_LCD_line(buf, 0, 0);
+		snprintf_P(buf, sizeof(buf), PSTR("           %5d"),iMessageCounter);
+		print_LCD_line(buf, 1, 0);
         break;
 
       case PAGE_TXRXPOWER:
-		printBufCurrent(buf,sizeof buf,TransmitCurrent_uA,1);
-		print_LCD_line(buf,1, 1);		
-		printBufCurrent(buf,sizeof buf,ReceiveCurrent_uA,2);
-		print_LCD_line(buf,2, 1);		
+		printBufCurrent(buf,sizeof(buf), TransmitCurrent_uA, "TX");
+		print_LCD_line(buf, 0, 0);		
+		printBufCurrent(buf,sizeof(buf), ReceiveCurrent_uA, "RX");
+		print_LCD_line(buf, 1, 0);		
         break;
 
       case PAGE_SLEEPPOWER:
-		printBufCurrent(buf,sizeof buf,SleepCurrent_uA,0);
-		print_LCD_line(buf,1, 1);				
+		printBufCurrent(buf,sizeof(buf), SleepCurrent_uA, "SLEEP");
+		print_LCD_line(buf, 0, 0);				
         break;
 
       default:
         break;
     }
-    
+
     if (LCDML.BT_checkAny()) // check if any button is pressed (enter, up, down, left, right)
     {      
       LCDML.FUNC_goBackToMenu();  // leave this function   
@@ -888,7 +882,7 @@ void menuCfgChannel(uint8_t line)
 	if (line == LCDML.MENU_getCursorPos()) 
 	{
 		menuCfgEntry( iRf24Channel );
-		iRf24Channel = constrain_hi( iRf24Channel, 125 );
+		iRf24Channel = CONSTRAIN_HI( iRf24Channel, 125 );
 	} 
 
 	char buf[LCD_COLS+1];
@@ -920,7 +914,7 @@ void menuCfgNodePa(uint8_t line)
 	if (line == LCDML.MENU_getCursorPos()) 
 	{
 		menuCfgEntry( iRf24PaLevel );
-		iRf24PaLevel = constrain_hi( iRf24PaLevel, iNrPaLevels-1 );
+		iRf24PaLevel = CONSTRAIN_HI( iRf24PaLevel, COUNT_OF(pcPaLevelNames)-1 );
 	} 
 
 	char buf[LCD_COLS+1];
@@ -936,7 +930,7 @@ void menuCfgGwPa(uint8_t line)
 	if (line == LCDML.MENU_getCursorPos()) 
 	{
 		menuCfgEntry( iRf24PaLevelGw );
-		iRf24PaLevelGw = constrain_hi( iRf24PaLevelGw, iNrPaLevels-1 );
+		iRf24PaLevelGw = CONSTRAIN_HI( iRf24PaLevelGw, COUNT_OF(pcPaLevelNames)-1 );
 	} 
 
 	char buf[LCD_COLS+1];
@@ -952,7 +946,7 @@ void menuCfgRate(uint8_t line)
 	if (line == LCDML.MENU_getCursorPos()) 
 	{
 		menuCfgEntry( iRf24DataRate );
-		iRf24DataRate = constrain_hi( iRf24DataRate, iNrDataRates-1 );
+		iRf24DataRate = CONSTRAIN_HI( iRf24DataRate, COUNT_OF(pcDataRateNames)-1 );
 	} 
 
 	char buf[LCD_COLS+1];
@@ -968,7 +962,7 @@ void menuCfgRadioId(uint8_t line)
 	if (line == LCDML.MENU_getCursorPos()) 
 	{
 		menuCfgEntry( iRf24BaseRadioId );
-		iRf24BaseRadioId = constrain_hi( iRf24BaseRadioId, iNrBaseRadioIds-1 );
+		iRf24BaseRadioId = CONSTRAIN_HI( iRf24BaseRadioId, COUNT_OF(RF24_BASE_ID_VARS)-1 );
 		memcpy(RF24_BASE_ID_VAR, RF24_BASE_ID_VARS[iRf24BaseRadioId], sizeof(RF24_BASE_ID_VAR));
 	} 
 
@@ -1019,7 +1013,7 @@ void menuResetBuf(__attribute__((unused)) uint8_t param)
 //  ... Maybe some done message ...
 //	LCD_clear();
 //	char buf[LCD_COLS+1];
-//	print_LCD_line("Done", 1, 1);
+//	print_LCD_line("Done", 0, 0);
 //  wait some time...
 
 	LCDML.FUNC_goBackToMenu();
@@ -1065,25 +1059,25 @@ void LCD_local_display(void) {
 		case STATE_ASK_GATEWAY:
 		{
 			LCD_clear();
-			snprintf_P(buf, sizeof buf, PSTR("UPDATE GATEWAY?:"));
-			print_LCD_line(buf, 1, 1);
+			snprintf_P(buf, sizeof(buf), PSTR("UPDATE GATEWAY?:"));
+			print_LCD_line(buf, 0, 0);
 			if (bUpdateGateway){
-				snprintf_P(buf, sizeof buf, PSTR("YES"));
-				print_LCD_line(buf, 2, 14);
+				snprintf_P(buf, sizeof(buf), PSTR("YES"));
+				print_LCD_line(buf, 1, 13);
 			}
 			else{
-				snprintf_P(buf, sizeof buf, PSTR("NO"));
-				print_LCD_line(buf, 2, 15);
+				snprintf_P(buf, sizeof(buf), PSTR("NO"));
+				print_LCD_line(buf, 1, 14);
 			}
 			break;
 		}			
 		case STATE_UPDATE_GATEWAY:
 		{
 			LCD_clear();
-			snprintf_P(buf, sizeof buf, PSTR("FAILED GATEWAY!"));
-			print_LCD_line(buf, 1, 1);
-			snprintf_P(buf, sizeof buf, PSTR("%s"),pcGatewayRetryNames[iRetryGateway]);
-			print_LCD_line(buf, 2, 1);
+			snprintf_P(buf, sizeof(buf), PSTR("FAILED GATEWAY!"));
+			print_LCD_line(buf, 0, 0);
+			snprintf_P(buf, sizeof(buf), PSTR("%s"),pcGatewayRetryNames[iRetryGateway]);
+			print_LCD_line(buf, 1, 0);
 			break;								
 		}	
 	}
