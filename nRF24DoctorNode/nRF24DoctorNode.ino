@@ -234,6 +234,7 @@ uint16_t iMeanDelayDestination_ms = 0;
 uint16_t iMaxDelayDestination_ms = 0;
 
 //**** Current Measurement ****
+#include <PinChangeInterrupt.h>					// for Pin Change Interrupt      Download: https://github.com/NicoHood/PinChangeInterrupt
 const uint8_t iNrCurrentMeasurements 	= 60;	//Nr of measurements for averaging current. <64 to prevent risk of overflow of iAdcSum
 
 const float r1_ohm    = 2.2;
@@ -340,7 +341,7 @@ ISR (ADC_vect){
 }
 
 void ISR_TransmitTriggerADC(){
-	detachInterrupt(digitalPinToInterrupt(INTERRUPT_CE_PIN));
+	detachPCINT(digitalPinToPinChangeInterrupt(MY_RF24_CE_PIN));
 	//Settings for TX - Transmit measurement
 	iStartStorageAfterNrAdcSamples  = 7; 	//Note this depends on the set ADC prescaler (currently: 16x prescaler) + Matched to TX timing
 	switch (iRf24DataRate){
@@ -451,7 +452,7 @@ void statemachine()
 		case STATE_TX:
 			//Transmit Current Measurement
 			EIFR |= 0x01;					//Clear interrupt flag to prevent an immediate trigger
-			attachInterrupt(digitalPinToInterrupt(INTERRUPT_CE_PIN), ISR_TransmitTriggerADC, RISING);
+			attachPCINT(digitalPinToPinChangeInterrupt(MY_RF24_CE_PIN), ISR_TransmitTriggerADC,RISING);
 			transmit();
 			lLastTransmit = micros();
 			currState = STATE_TX_WAIT;
