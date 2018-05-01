@@ -532,7 +532,7 @@ void statemachine()
 				{
 					// Got a reply from gateway that message was received correctly.
 					// Gateway will change to new settings, so the node can also activate the settings.
-					SaveStatesToEepromAndResetandReset();
+					SaveStatesToEepromAndReset();
 					// Never return here...
 				}
 			}
@@ -675,12 +675,12 @@ void LoadStatesFromEEPROM()
 	{
 		// Load defaults & save default to eeprom
 		loadDefaults();
-		SaveStatesToEepromAndResetandReset();
+		SaveStatesToEepromAndReset();
 		// Never return here...
 	}
 }
 
-void SaveStatesToEepromAndResetandReset()
+void SaveStatesToEepromAndReset()
 {
 	saveState(EEPROM_CHANNEL, iRf24Channel);
 	saveState(EEPROM_PA_LEVEL, iRf24PaLevel);
@@ -1017,7 +1017,7 @@ void menuSaveNodeEeprom(__attribute__((unused)) uint8_t param)
 {
 	if (LCDML.FUNC_setup())
 	{
-		SaveStatesToEepromAndResetandReset();
+		SaveStatesToEepromAndReset();
 		// Never return here...
 	} 
 }
@@ -1059,7 +1059,7 @@ void menuDefaultNodeEeprom(__attribute__((unused)) uint8_t param)
 	if (LCDML.FUNC_setup())
 	{
 		loadDefaults();
-		SaveStatesToEepromAndResetandReset();
+		SaveStatesToEepromAndReset();
 		// Never return here...
 	} 
 }
