@@ -145,12 +145,13 @@ LCDML_addAdvanced (10 , LCDML_0_6       , 5    , NULL              , ""         
 LCDML_addAdvanced (11 , LCDML_0_6       , 6    , NULL              , ""                , menuCfgRadioId   , 0                , _LCDML_TYPE_dynParam);
 LCDML_add         (12 , LCDML_0_6       , 7                        , "Reset buff   x"  , menuResetBuf);
 LCDML_add         (13 , LCDML_0_6       , 8                        , "Eeprom       >"  , NULL);
-LCDML_add         (14 , LCDML_0_6_8     , 1                        , "Save         x"  , menuSaveEeprom);
-LCDML_add         (15 , LCDML_0_6_8     , 2                        , "Load         x"  , menuLoadEeprom);
-LCDML_add         (16 , LCDML_0_6_8     , 3                        , "Defaults     x"  , menuDefaultEeprom);
-LCDML_add         (17 , LCDML_0_6_8     , 4                        , "Back         <"  , menuBack);
-LCDML_add         (18 , LCDML_0_6       , 9                        , "Back         <"  , menuBack);
-#define _LCDML_DISP_cnt    18   // Should equal last id in menu
+LCDML_add         (14 , LCDML_0_6_8     , 1                        , "Save node    x"  , menuSaveNodeEeprom);
+LCDML_add         (15 , LCDML_0_6_8     , 2                        , "Save node&gw x"  , menuSaveNodeAndGwEeprom);
+LCDML_add         (16 , LCDML_0_6_8     , 3                        , "Load node    x"  , menuLoadNodeEeprom);
+LCDML_add         (17 , LCDML_0_6_8     , 4                        , "Defaults     x"  , menuDefaultNodeEeprom);
+LCDML_add         (18 , LCDML_0_6_8     , 5                        , "Back         <"  , menuBack);
+LCDML_add         (19 , LCDML_0_6       , 9                        , "Back         <"  , menuBack);
+#define _LCDML_DISP_cnt    19   // Should equal last id in menu
 
 
 
@@ -260,7 +261,6 @@ bool bUpdateGateway 	= false;
 uint8_t updateGatewayAttemptsRemaining;
 const uint8_t updateGatewayNumAttempts = 10;
 
-bool bAckGatewayUpdate 	= false;
 const uint8_t iNrGatwayRetryOptions = 3;
 const char *pcGatewayRetryNames[iNrGatwayRetryOptions] = { "SKIP GATEWAY", "RETRY GATEWAY" , "CANCEL ALL"};
 
@@ -426,7 +426,7 @@ enum state {	STATE_IDLE,
 				// Regular measurement states
 				STATE_TX, STATE_TX_WAIT, STATE_SLEEP,								
 				// Gateway update states
-				STATE_TX_GW_UPDATE, STATE_WAIT_RX_GW_ACK, STATE_FAILED_GW_UPDATE,
+				STATE_START_GW_UPDATE, STATE_TX_GW_UPDATE, STATE_FAILED_GW_UPDATE,
 };
 static state currState = STATE_IDLE;
 
@@ -442,8 +442,7 @@ void statemachine()
 			if (bUpdateGateway)
 			{
 				// Start of gateway update
-				currState = STATE_TX_GW_UPDATE;
-				updateGatewayAttemptsRemaining = updateGatewayNumAttempts;
+				currState = STATE_START_GW_UPDATE;
 			}
 			else
 			{
@@ -512,6 +511,11 @@ void statemachine()
 			currState = STATE_IDLE;
 			break;		
 
+		case STATE_START_GW_UPDATE:
+			updateGatewayAttemptsRemaining = updateGatewayNumAttempts;
+			currState = STATE_TX_GW_UPDATE;
+			break;
+
 		case STATE_TX_GW_UPDATE:
 			if (updateGatewayAttemptsRemaining)
 			{
@@ -523,15 +527,13 @@ void statemachine()
 				const uint16_t iMessageToGateway = iRf24Channel*100 + iRf24PaLevelGw*10 + iRf24DataRate;
 				MsgUpdateGateway.set(iMessageToGateway);
 
-				// Clear flag indicating gateway has acknowledged the new settings.
-				bAckGatewayUpdate = false;
-
 				// Transmit message with software ack request (returned in "receive function")
 				if ( send(MsgUpdateGateway, true) )
 				{
 					// Got a reply from gateway that message was received correctly.
-					stateEnteredTimestampUs = micros();
-					currState = STATE_WAIT_RX_GW_ACK;
+					// Gateway will change to new settings, so the node can also activate the settings.
+					SaveStatesToEepromAndResetandReset();
+					// Never return here...
 				}
 			}
 			else
@@ -541,27 +543,11 @@ void statemachine()
 			}
 			break;
 
-		case STATE_WAIT_RX_GW_ACK:
-			if (bAckGatewayUpdate)
-			{
-				// Gateway acknowledged reception of new settings
-				SaveStatesToEEPROM();
-				// Do a Soft Reset - This allows for the radio to correctly reload with the new settings from EEPROM					
-				asm volatile ("  jmp 0");
-			}
-
-			if (micros() - stateEnteredTimestampUs >= 2000000)
-			{
-				// Gateway did not acknowledge reception of new settings in time
-				// TODO: We could perform another retry here...
-				currState = STATE_FAILED_GW_UPDATE;
-			}
-			break;
-
 		case STATE_FAILED_GW_UPDATE:
 			// TODO: Signal the UI that GW update failed
-			// TODO: How to recover from this situation? Gateway might have received new settings; we just don't know...
 			// ??? LoadStatesFromEEPROM(); ???
+			// Signal update sequence finished (and failed, as it didn't reset afterwards)
+			bUpdateGateway = false;
 			currState = STATE_IDLE;
 			break;
 
@@ -589,11 +575,6 @@ void receive(const MyMessage &message) {
 			lTimeDelayBuffer_Destination_us[iIndexInTimeArray] = micros()-lTimeOfTransmit_us[iIndexInTimeArray];
 		}
 		iNrNAckMessages--;	//Received an Acknowledge Message (so one less No Ack)
-	}
-	
-	// Gateway Update Acknowledge - if we have received this we can "safely" apply the new settings to this node
-	if (message.isAck() == 1 && message.type == V_CUSTOM && message.sensor==CHILD_ID_UPDATE_GATEWAY){	//Acknowledge message & of correct type & Sensor
-		bAckGatewayUpdate = true;
 	}
 }
 
@@ -694,11 +675,12 @@ void LoadStatesFromEEPROM()
 	{
 		// Load defaults & save default to eeprom
 		loadDefaults();
-		SaveStatesToEEPROM();
+		SaveStatesToEepromAndResetandReset();
+		// Never return here...
 	}
 }
 
-void SaveStatesToEEPROM()
+void SaveStatesToEepromAndResetandReset()
 {
 	saveState(EEPROM_CHANNEL, iRf24Channel);
 	saveState(EEPROM_PA_LEVEL, iRf24PaLevel);
@@ -708,6 +690,9 @@ void SaveStatesToEEPROM()
 	saveState(EEPROM_DESTINATION_NODE, iDestinationNode);
 	// Mark eeprom contents valid
 	saveState(EEPROM_FLAG, EEPROM_FLAG_MAGIC);
+
+	// Do a Soft Reset - This allows for the radio to correctly reload with the new settings from EEPROM					
+	asm volatile ("  jmp 0");
 }
 
 /*****************************************************************/
@@ -738,7 +723,6 @@ void ClearStorageAndCounters() {
 		bArrayNAckMessages[n] = 0;
 	}
 	iNrNAckMessages = iMessageCounter = iNrFailedMessages = 0;
-	bAckGatewayUpdate = false;	// TODO: Why clear this flag here?
 }
 
 void getMeanAndMaxFromArray(uint16_t *mean_value, uint16_t *max_value, unsigned long *buffer, uint8_t size) {
@@ -897,9 +881,9 @@ void menuPage(uint8_t param)
 		}
 	} 
 
-	if(LCDML.FUNC_close())
-	{    
-	}
+	// if(LCDML.FUNC_close())
+	// {    
+	// }
 }
 
 
@@ -1029,18 +1013,39 @@ void menuCfgRadioId(uint8_t line)
 	lcd.print(buf); 
 }
 
-void menuSaveEeprom(__attribute__((unused)) uint8_t param)
+void menuSaveNodeEeprom(__attribute__((unused)) uint8_t param)
 {
 	if (LCDML.FUNC_setup())
 	{
-		// TODO: Start the GW update sequence too!
-		// loadNewRadioSettingsGateway();
-		SaveStatesToEEPROM();
-		LCDML.FUNC_goBackToMenu();
+		SaveStatesToEepromAndResetandReset();
+		// Never return here...
 	} 
 }
 
-void menuLoadEeprom(__attribute__((unused)) uint8_t param)
+void menuSaveNodeAndGwEeprom(__attribute__((unused)) uint8_t param)
+{
+	if (LCDML.FUNC_setup())
+	{
+		// Trigger the gateway update sequence
+		bUpdateGateway = true;
+	}
+
+	if (LCDML.FUNC_loop())
+	{
+		if (not bUpdateGateway)
+		{
+			// Gateway update finished with error
+			// TODO: Report and request interaction??
+			LCDML.FUNC_goBackToMenu();
+		}
+	} 
+
+	// if(LCDML.FUNC_close())
+	// {    
+	// }
+}
+
+void menuLoadNodeEeprom(__attribute__((unused)) uint8_t param)
 {
 	if (LCDML.FUNC_setup())
 	{
@@ -1049,15 +1054,13 @@ void menuLoadEeprom(__attribute__((unused)) uint8_t param)
 	} 
 }
 
-void menuDefaultEeprom(__attribute__((unused)) uint8_t param)
+void menuDefaultNodeEeprom(__attribute__((unused)) uint8_t param)
 {
 	if (LCDML.FUNC_setup())
 	{
-		// TODO: Start the GW update sequence too!
-		// loadNewRadioSettingsGateway();
 		loadDefaults();
-		SaveStatesToEEPROM();
-		LCDML.FUNC_goBackToMenu();
+		SaveStatesToEepromAndResetandReset();
+		// Never return here...
 	} 
 }
 
