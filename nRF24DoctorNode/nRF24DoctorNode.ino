@@ -184,7 +184,6 @@ static Bounce button = Bounce();
 #define CHILD_ID_COUNTER 0
 #define CHILD_ID_UPDATE_GATEWAY 0
 MyMessage MsgCounter(CHILD_ID_COUNTER, V_CUSTOM);   				//Send Message Counter value
-MyMessage MsgUpdateGateway(CHILD_ID_UPDATE_GATEWAY, V_CUSTOM);   	//Send value for Gateway settings: xxxyz (xxx = Channel, y = PaLevel, z = DataRate)
 #define DELAY_BETWEEN_MESSAGES_MICROS 500000						//Normal Interval between messages
 
 //**** Monitoring Constants&Variables ****
@@ -256,9 +255,12 @@ volatile uint8_t iNrAdcSamplesElapsed;
 volatile boolean bAdcDone;
 
 //**** Remote Gateway Update ****
-uint8_t iRetryGateway 	= 0;
-bool bUpdateGateway 	= 0;
-bool bAckGatewayUpdate 	= 0;
+//uint8_t iRetryGateway 	= 0;
+bool bUpdateGateway 	= false;
+uint8_t updateGatewayAttemptsRemaining;
+const uint8_t updateGatewayNumAttempts = 10;
+
+bool bAckGatewayUpdate 	= false;
 const uint8_t iNrGatwayRetryOptions = 3;
 const char *pcGatewayRetryNames[iNrGatwayRetryOptions] = { "SKIP GATEWAY", "RETRY GATEWAY" , "CANCEL ALL"};
 
@@ -419,37 +421,48 @@ void loop()
 /*****************************************************************************/
 /********************* TRANSMIT & MEASUREMENT STATEMACHINE *******************/
 /*****************************************************************************/
-enum state { STATE_IDLE, STATE_TX, STATE_TX_WAIT, STATE_SLEEP };
+
+enum state {	STATE_IDLE,
+				// Regular measurement states
+				STATE_TX, STATE_TX_WAIT, STATE_SLEEP,								
+				// Gateway update states
+				STATE_TX_GW_UPDATE, STATE_WAIT_RX_GW_ACK, STATE_FAILED_GW_UPDATE,
+};
 static state currState = STATE_IDLE;
-static bool transmitAcive = true;
 
 void statemachine()
 {
-	static unsigned long lLastTransmit = 0;
+	static unsigned long stateEnteredTimestampUs = 0;
 
 //	state prevState = currState;
 
 	switch (currState)
 	{
 		case STATE_IDLE:
-			// Do nothing, wait for start of next measurement
-			if (transmitAcive)
+			if (bUpdateGateway)
 			{
+				// Start of gateway update
+				currState = STATE_TX_GW_UPDATE;
+				updateGatewayAttemptsRemaining = updateGatewayNumAttempts;
+			}
+			else
+			{
+				// Start of next measurement round
 				currState = STATE_TX;
 			}
 			break;
 
 		case STATE_TX:
-			//Transmit Current Measurement
+			// Transmit Current Measurement
 			EIFR |= 0x01;					//Clear interrupt flag to prevent an immediate trigger
 			attachInterrupt(digitalPinToInterrupt(INTERRUPT_CE_PIN), ISR_TransmitTriggerADC, RISING);
 			transmit();
-			lLastTransmit = micros();
+			stateEnteredTimestampUs = micros();
 			currState = STATE_TX_WAIT;
 			break;			
 
 		case STATE_TX_WAIT:
-			if (micros() - lLastTransmit >= 100000)
+			if (micros() - stateEnteredTimestampUs >= 100000)
 			{
 				//Calculate Mean and Max Delays
 				getMeanAndMaxFromArray(&iMeanDelayFirstHop_ms,&iMaxDelayFirstHop_ms,lTimeDelayBuffer_FirstHop_us,iNrTimeDelays);
@@ -497,7 +510,60 @@ void statemachine()
 			transportStandBy();
 
 			currState = STATE_IDLE;
-			break;			
+			break;		
+
+		case STATE_TX_GW_UPDATE:
+			if (updateGatewayAttemptsRemaining)
+			{
+				--updateGatewayAttemptsRemaining;
+				MyMessage MsgUpdateGateway(CHILD_ID_UPDATE_GATEWAY, V_CUSTOM);
+				MsgUpdateGateway.setDestination(0);
+				MsgUpdateGateway.setSensor(250);
+				// Send value for Gateway settings: xxxyz (xxx = Channel, y = PaLevel, z = DataRate)
+				const uint16_t iMessageToGateway = iRf24Channel*100 + iRf24PaLevelGw*10 + iRf24DataRate;
+				MsgUpdateGateway.set(iMessageToGateway);
+
+				// Clear flag indicating gateway has acknowledged the new settings.
+				bAckGatewayUpdate = false;
+
+				// Transmit message with software ack request (returned in "receive function")
+				if ( send(MsgUpdateGateway, true) )
+				{
+					// Got a reply from gateway that message was received correctly.
+					stateEnteredTimestampUs = micros();
+					currState = STATE_WAIT_RX_GW_ACK;
+				}
+			}
+			else
+			{
+				// Retry attempts exhausted. Give up.
+				currState = STATE_FAILED_GW_UPDATE;
+			}
+			break;
+
+		case STATE_WAIT_RX_GW_ACK:
+			if (bAckGatewayUpdate)
+			{
+				// Gateway acknowledged reception of new settings
+				SaveStatesToEEPROM();
+				// Do a Soft Reset - This allows for the radio to correctly reload with the new settings from EEPROM					
+				asm volatile ("  jmp 0");
+			}
+
+			if (micros() - stateEnteredTimestampUs >= 2000000)
+			{
+				// Gateway did not acknowledge reception of new settings in time
+				// TODO: We could perform another retry here...
+				currState = STATE_FAILED_GW_UPDATE;
+			}
+			break;
+
+		case STATE_FAILED_GW_UPDATE:
+			// TODO: Signal the UI that GW update failed
+			// TODO: How to recover from this situation? Gateway might have received new settings; we just don't know...
+			// ??? LoadStatesFromEEPROM(); ???
+			currState = STATE_IDLE;
+			break;
 
 		default:
 			break;
@@ -527,7 +593,7 @@ void receive(const MyMessage &message) {
 	
 	// Gateway Update Acknowledge - if we have received this we can "safely" apply the new settings to this node
 	if (message.isAck() == 1 && message.type == V_CUSTOM && message.sensor==CHILD_ID_UPDATE_GATEWAY){	//Acknowledge message & of correct type & Sensor
-		bAckGatewayUpdate = 1;
+		bAckGatewayUpdate = true;
 	}
 }
 
@@ -591,39 +657,6 @@ void loadNewRadioSettings() {
 	Sprintln(F("Done"));
 }
 
-void loadNewRadioSettingsGateway() {
-	// Yveaux: This needs to land in a statemachine!
-
-	switch (iRetryGateway){
-		case 0:	//Skip Gateway update (= only update this Node)
-			//Store new values to EEPROM & Restart the program
-			SaveStatesToEEPROM();
-			asm volatile ("  jmp 0");	//Do a Soft Reset - This allows for the radio to correctly reload with the new settings from EEPROM
-			break;				
-		case 1:	{
-			//(Re-)try Gateway update
-			uint16_t iMessageToGateway = iRf24Channel*100+iRf24PaLevelGw*10+iRf24DataRate;
-			boolean success = send(MsgUpdateGateway.setDestination(0).setSensor(250).set(iMessageToGateway), true);		//Transmit message with software ack request (returned in "receive function")
-			int nRepeats = 0;
-			while (!success && nRepeats<10) {	//Re-try
-				nRepeats++;
-				success = send(MsgUpdateGateway.setDestination(0).set(iMessageToGateway), true);
-			}
-			wait(2000);	//wait for ACK from Gateway
-			if (bAckGatewayUpdate){
-				//Store new values to EEPROM & Restart the program
-				SaveStatesToEEPROM();
-				asm volatile ("  jmp 0");	//Do a Soft Reset - This allows for the radio to correctly reload with the new settings from EEPROM					
-			}
-			break;
-		}					
-		case 2:	//Cancel All
-// TODO			opState = STATE_RUN;
-			LoadStatesFromEEPROM();
-//			bDspRefresh = true;
-			break;
-	}
-}
 /*****************************************************************/
 /************************ EEPROM FUNCTIONS ***********************/
 /*****************************************************************/
@@ -705,7 +738,7 @@ void ClearStorageAndCounters() {
 		bArrayNAckMessages[n] = 0;
 	}
 	iNrNAckMessages = iMessageCounter = iNrFailedMessages = 0;
-	bAckGatewayUpdate = 0;
+	bAckGatewayUpdate = false;	// TODO: Why clear this flag here?
 }
 
 void getMeanAndMaxFromArray(uint16_t *mean_value, uint16_t *max_value, unsigned long *buffer, uint8_t size) {
