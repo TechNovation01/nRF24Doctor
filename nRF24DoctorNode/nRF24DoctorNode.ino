@@ -24,7 +24,6 @@ Change log:
 #define CURRENT_PIN         A5
 #define adcPin              5     // A5, Match to CURRENT_PIN for configuring registers ADC
 #define TRIGGER_PIN         A6    // Debugging purposes with scope
-#define INTERRUPT_CE_PIN    2	  // Used as hardware trigger to start transmit current measurement
 
 //**** DEBUG *****
 #define LOCAL_DEBUG
@@ -371,7 +370,6 @@ void before() {						//Initialization before the MySensors library starts up
 	pinMode(TRIGGER_PIN, OUTPUT);
 	pinMode(MOSFET_2P2OHM_PIN,OUTPUT);
 	pinMode(MOSFET_100OHM_PIN,OUTPUT);
-	pinMode(INTERRUPT_CE_PIN,INPUT);
 	digitalWrite(MOSFET_2P2OHM_PIN,HIGH);
 	digitalWrite(TRIGGER_PIN,LOW);
 
