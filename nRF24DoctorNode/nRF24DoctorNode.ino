@@ -280,31 +280,40 @@ void lcdml_menu_control(void)
 		button.interval(5); // interval in ms
 	}
 
-	const int8_t encStep = 4;
+	// We're interested in relative encoder moves only, so 8bits position suffices.
 	const int8_t enc = int8_t(encoder.read());
 	button.update();
 	const bool pressed = button.read() == LOW;
 	static bool prevPressed = false;
 
-	if (enc <= (-encStep + 1) )
+	// Mechanical encoder generates 4 increments in 1 mechanical 'step'.
+	const int8_t encStep = 4;
+	for (;;)
 	{
-		LCDML.BT_down();
-		encoder.write(enc + encStep);
-	}  
-	else if (enc >= (encStep - 1))
-	{
-		LCDML.BT_up();
-		encoder.write(enc - encStep);
-	}  
-	else 
-	{
-		if (pressed and (not prevPressed))
+		static int8_t encPrev = 0;
+		int8_t delta = enc - encPrev;
+		if (delta <= -encStep)
 		{
-			// Pressed and previously not pressed
-			LCDML.BT_enter();  
+			LCDML.BT_down();
+			encPrev -= encStep;
 		}
-		prevPressed = pressed;
+		else if (delta >= encStep)
+		{
+			LCDML.BT_up();
+			encPrev += encStep;
+		}
+		else
+		{
+			break;
+		}
 	}
+
+	if (pressed and (not prevPressed))
+	{
+		// Pressed and previously not pressed
+		LCDML.BT_enter();  
+	}
+	prevPressed = pressed;
 }
 
 /*****************************************************************************/
