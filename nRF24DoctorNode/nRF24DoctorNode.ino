@@ -16,14 +16,22 @@ Change log:
 */
 
 //**** CONNECTIONS *****
-#define ENCODER_A_PIN       A0
-#define ENCODER_B_PIN       A1
+#define ENCODER_A_PIN       2		//Interrupt pin required for Encoder for optimal response
+#define ENCODER_B_PIN       3		//Interrupt pin required for Encoder for optimal response
+#define TRIGGER_PIN         4    	//Debugging purposes with scope
+#define LCD_D7         		5    	
+#define LCD_D6         		6
+#define LCD_D5         		7
+#define LCD_D4         		8
+//PIN 9~13: NRF24 RADIO
+#define LCD_ENABLE   		A0
+#define LCD_RS   			A1
 #define MOSFET_2P2OHM_PIN   A2
 #define MOSFET_100OHM_PIN   A3
-#define BUTTON_PIN          A4    // physical pin , use internal pullup
+#define BUTTON_PIN          A4    	// physical pin , use internal pullup
 #define CURRENT_PIN         A5
-#define adcPin              5     // A5, Match to CURRENT_PIN for configuring registers ADC
-#define TRIGGER_PIN         A6    // Debugging purposes with scope
+#define ADC_PIN_NR           5     	// A5, Match to CURRENT_PIN for configuring registers ADC
+
 
 //**** DEBUG *****
 #define LOCAL_DEBUG
@@ -64,7 +72,7 @@ Change log:
 	#define LCD_ROWS 2
 	//LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);  	// Set the LCD I2C address
 	//LiquidCrystal_I2C lcd(0x27, 16, 2);  								// Set the LCD I2C address
-	LiquidCrystal lcd(8, 7, 6, 5, 4, 3); 								// LCD with parallel interface
+	LiquidCrystal lcd(LCD_RS,LCD_ENABLE, LCD_D4, LCD_D5, LCD_D6, LCD_D7); // LCD with parallel interface
 #else
 	#include <Adafruit_GFX.h>
 	#include <TFT_ILI9163C.h>
@@ -160,8 +168,7 @@ LCDML_createMenu(_LCDML_DISP_cnt);
 # endif
 
 //**** ENCODER & BUTTON  *****
-//#define ENCODER_OPTIMIZE_INTERRUPTS //Only when using pin2/3 (or 20/21 on mega)
-#define ENCODER_DO_NOT_USE_INTERRUPTS
+//#define ENCODER_OPTIMIZE_INTERRUPTS //Only when using pin2/3 (or 20/21 on mega) - using this will screw up the other interrupt routine and we actually don't need it.
 #include <Encoder.h>    // for Encoder      Download: https://github.com/PaulStoffregen/Encoder
 #include <Bounce2.h>	// button debounce  Download: https://github.com/thomasfredericks/Bounce2
 
@@ -376,7 +383,7 @@ void before() {						//Initialization before the MySensors library starts up
 	//**** ADC SETUP ****
 	ADCSRA =  bit (ADEN);                      				// turn ADC on
 	ADCSRA |= bit (ADPS2);                               	// Prescaler of 16: To get sufficient samples in Tx Current Measurement 
-	ADMUX  =  bit (REFS0) | bit (REFS1) | (adcPin & 0x07);  // ARef internal and select input port
+	ADMUX  =  bit (REFS0) | bit (REFS1) | (ADC_PIN_NR & 0x07);  // ARef internal and select input port
 
 	//****  LCD *****
 	#ifdef CHARACTER_DISPLAY
