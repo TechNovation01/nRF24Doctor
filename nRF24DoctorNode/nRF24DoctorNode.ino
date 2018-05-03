@@ -257,12 +257,14 @@ volatile boolean bAdcDone;
 
 //**** Remote Gateway Update ****
 //uint8_t iRetryGateway 	= 0;
-bool bUpdateGateway 	= false;
+bool bUpdateGateway = false;
 uint8_t updateGatewayAttemptsRemaining;
 const uint8_t updateGatewayNumAttempts = 10;
 
 const uint8_t iNrGatwayRetryOptions = 3;
 const char *pcGatewayRetryNames[iNrGatwayRetryOptions] = { "SKIP GATEWAY", "RETRY GATEWAY" , "CANCEL ALL"};
+
+const uint16_t restartDelayMs = 3000u;
 
 #define COUNT_OF(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
 #define CONSTRAIN_HI(amt,high) ((amt)>(high)?(high):(amt))
@@ -776,6 +778,16 @@ void print_LCD_line(const char *string, int row, int col) {
 #endif
 }
 
+void print_LCD_line(const __FlashStringHelper *string, int row, int col) {
+#ifdef CHARACTER_DISPLAY
+	lcd.setCursor(col,row);
+	lcd.print(string);
+#else
+	tft.setCursor(TEXT_WIDTH(col), TEXT_HEIGHT(row)); 
+	tft.print(string);
+#endif
+}
+
 void LCD_clear() {
 #ifdef CHARACTER_DISPLAY
 	lcd.clear();
@@ -1017,6 +1029,23 @@ void menuSaveNodeEeprom(__attribute__((unused)) uint8_t param)
 {
 	if (LCDML.FUNC_setup())
 	{
+		LCD_clear();
+		print_LCD_line(F("Eeprom saved"), 0, 0);
+		print_LCD_line(F("Restarting..."), 1, 0);
+		delay(restartDelayMs);
+		SaveStatesToEepromAndReset();
+		// Never return here...
+	} 
+}
+
+void menuDefaultNodeEeprom(__attribute__((unused)) uint8_t param)
+{
+	if (LCDML.FUNC_setup())
+	{
+		LCD_clear();
+		print_LCD_line(F("Defaults saved"), 0, 0);
+		print_LCD_line(F("Restarting..."), 1, 0);
+		delay(restartDelayMs);
 		SaveStatesToEepromAndReset();
 		// Never return here...
 	} 
@@ -1028,21 +1057,27 @@ void menuSaveNodeAndGwEeprom(__attribute__((unused)) uint8_t param)
 	{
 		// Trigger the gateway update sequence
 		bUpdateGateway = true;
+		LCD_clear();
 	}
 
 	if (LCDML.FUNC_loop())
 	{
+		static bool prevUpdateGateway = false;
 		if (not bUpdateGateway)
 		{
 			// Gateway update finished with error
-			// TODO: Report and request interaction??
-			LCDML.FUNC_goBackToMenu();
+			if (prevUpdateGateway != bUpdateGateway)
+			{
+				// Print message only once
+				print_LCD_line(F("Failed"), 0, 0);
+			}
+			if (LCDML.BT_checkAny()) // check if any button is pressed (enter, up, down, left, right)
+			{      
+				LCDML.FUNC_goBackToMenu();  // leave this function
+			}
 		}
+		prevUpdateGateway = bUpdateGateway;
 	} 
-
-	// if(LCDML.FUNC_close())
-	// {    
-	// }
 }
 
 void menuLoadNodeEeprom(__attribute__((unused)) uint8_t param)
@@ -1050,18 +1085,16 @@ void menuLoadNodeEeprom(__attribute__((unused)) uint8_t param)
 	if (LCDML.FUNC_setup())
 	{
 		LoadStatesFromEEPROM();
-		LCDML.FUNC_goBackToMenu();
+		LCD_clear();
+		print_LCD_line(F("Eeprom loaded"), 0, 0);
 	} 
-}
-
-void menuDefaultNodeEeprom(__attribute__((unused)) uint8_t param)
-{
-	if (LCDML.FUNC_setup())
+	if (LCDML.FUNC_loop())
 	{
-		loadDefaults();
-		SaveStatesToEepromAndReset();
-		// Never return here...
-	} 
+		if (LCDML.BT_checkAny()) // check if any button is pressed (enter, up, down, left, right)
+		{      
+			LCDML.FUNC_goBackToMenu();  // leave this function
+		}
+	}
 }
 
 void menuResetBuf(__attribute__((unused)) uint8_t param)
@@ -1069,14 +1102,16 @@ void menuResetBuf(__attribute__((unused)) uint8_t param)
 	if (LCDML.FUNC_setup())
 	{
 		ClearStorageAndCounters();
-//  ... Maybe some done message ...
-//	LCD_clear();
-//	char buf[LCD_COLS+1];
-//	print_LCD_line("Done", 0, 0);
-//  wait some time...
-
-		LCDML.FUNC_goBackToMenu();
+		LCD_clear();
+		print_LCD_line(F("Cleared"), 0, 0);
 	} 
+	if (LCDML.FUNC_loop())
+	{
+		if (LCDML.BT_checkAny()) // check if any button is pressed (enter, up, down, left, right)
+		{      
+			LCDML.FUNC_goBackToMenu();  // leave this function
+		}
+	}
 }
 
 void menuBack(__attribute__((unused)) uint8_t param)
@@ -1087,59 +1122,3 @@ void menuBack(__attribute__((unused)) uint8_t param)
 		LCDML.FUNC_goBackToMenu(1);
 	} 
 }
-
-/*
-void onButton2Pressed() {	//Apply/Select change (if available). In Viewing windows: toggle (reversed)
-	bDspRefresh = true;
-	switch (opState) {
-		
-		//Select Radio changes:
-		case STATE_ASK_GATEWAY:
-			bUpdateGateway= !bUpdateGateway;
-			if (bUpdateGateway){
-				iRetryGateway = 1;
-			}
-			else{
-				iRetryGateway = 0;
-			}
-			break;
-		case STATE_UPDATE_GATEWAY:
-			iRetryGateway++; if (iRetryGateway > (iNrGatwayRetryOptions-1)) iRetryGateway = 0;
-			break;
-	}
-}
-
-void LCD_local_display(void) {
-	static mode prevOpState = STATE_RUN;	//Remember previous state to allow for partial LCD updates
-	char buf[LCD_COLS+1];
-	bDspRefresh = false;
-	
-	switch (opState) {
-		case STATE_ASK_GATEWAY:
-		{
-			LCD_clear();
-			snprintf_P(buf, sizeof(buf), PSTR("UPDATE GATEWAY?:"));
-			print_LCD_line(buf, 0, 0);
-			if (bUpdateGateway){
-				snprintf_P(buf, sizeof(buf), PSTR("YES"));
-				print_LCD_line(buf, 1, 13);
-			}
-			else{
-				snprintf_P(buf, sizeof(buf), PSTR("NO"));
-				print_LCD_line(buf, 1, 14);
-			}
-			break;
-		}			
-		case STATE_UPDATE_GATEWAY:
-		{
-			LCD_clear();
-			snprintf_P(buf, sizeof(buf), PSTR("FAILED GATEWAY!"));
-			print_LCD_line(buf, 0, 0);
-			snprintf_P(buf, sizeof(buf), PSTR("%s"),pcGatewayRetryNames[iRetryGateway]);
-			print_LCD_line(buf, 1, 0);
-			break;								
-		}	
-	}
-	prevOpState = opState;
-}
-*/
