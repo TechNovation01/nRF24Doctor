@@ -508,7 +508,7 @@ void statemachine()
 					TransmitCurrent_uA 	= uAperBit1*((float)iAdcSum/(float)(iStopStorageAfterNrAdcSamples-iStartStorageAfterNrAdcSamples+1));
 					ReceiveCurrent_uA 	= uAperBit1*GetAvgADCBits(iNrCurrentMeasurements);
 				} else {
-					// Current Measurement co10e-uld not be completed...probably because the transmit failed
+					// Current Measurement could not be completed...probably because the transmit failed
 					TransmitCurrent_uA 	= 10000000;	//Will show ERR on display
 					ReceiveCurrent_uA 	= 10000000;	//Will show ERR on display
 				}
