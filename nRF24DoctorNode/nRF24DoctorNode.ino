@@ -391,7 +391,6 @@ void ISR_TransmitTriggerADC(){
 	ADCSRA |= bit (ADSC) | bit (ADIE);	  	//start new ADC conversion
 }
 
-
 /*****************************************************************************/
 /************************************ STARTUP ********************************/
 /*****************************************************************************/
@@ -434,11 +433,6 @@ void before() {						//Initialization before the MySensors library starts up
 
 void setup() {
 	loadNewRadioSettings();	//Load the Radio Settings as they are stored in EEPROM
-
-	// Prepare ping-pong transmit message to other node.
-	g_txMsgPingPong.setDestination(iDestinationNode);
-	g_txMsgPingPong.setSensor(CHILD_ID_COUNTER);
-	g_txMsgPingPong.setType(V_CUSTOM); 
 
 	//**** MENU *****
 	LCDML_setup(_LCDML_DISP_cnt);
@@ -529,27 +523,26 @@ void statemachine()
 			//Sleep Current Measurement
 			transportDisable();
 			delay_with_update(20);									//Gate charge time and settle time, don't use wait as it will prevent the radio from sleep
-			float SleepCurrent_uA_no_display = uAperBit1*GetAvgADCBits(iNrCurrentMeasurements);
-			if (SleepCurrent_uA_no_display < 1500){
+			float SleepCurrent_uA_intermediate = uAperBit1*GetAvgADCBits(iNrCurrentMeasurements);
+			if (SleepCurrent_uA_intermediate < 1500){
 				//Set Higher Sensitivity: uAperBit2
 				digitalWrite(MOSFET_2P2OHM_PIN, LOW);
 				digitalWrite(MOSFET_100OHM_PIN, HIGH);
-				delay_with_update(400);								//worst case settle time to charge through high impedance
-				SleepCurrent_uA_no_display = uAperBit2*GetAvgADCBits(iNrCurrentMeasurements);
+				delay_with_update(400);								//worst case settle time to charge through higher impedance
+				SleepCurrent_uA_intermediate = uAperBit2*GetAvgADCBits(iNrCurrentMeasurements);
 			}
-			else {SleepCurrent_uA = SleepCurrent_uA_no_display;Sprintln(F("Step1"));}
+			else {SleepCurrent_uA = SleepCurrent_uA_intermediate;}
 
-			if (SleepCurrent_uA_no_display < 15){
+			if (SleepCurrent_uA_intermediate < 15){
 				//Set Higher Sensitivity: uAperBit3
 				digitalWrite(MOSFET_2P2OHM_PIN, LOW);
 				digitalWrite(MOSFET_100OHM_PIN, LOW);
+				const float Init_Meas_SleepCurrent_uA = 0.4;
 				const unsigned long lTimeOut_InitCurrent_ms = 6000;
 				const unsigned long lTimeOut_Settled_SleepCurrent_ms = 30000;
-				unsigned long ldT  = Time_to_reach_InitCurrent_uA(0.4, lTimeOut_InitCurrent_ms);
-				Sprint(F("ldT:"));Sprintln(ldT);
+				unsigned long ldT  = Time_to_reach_InitCurrent_uA(Init_Meas_SleepCurrent_uA, lTimeOut_InitCurrent_ms);
 				if (ldT < lTimeOut_InitCurrent_ms){
-					float fTarget_uA_per_sec = (0.4/(float(ldT)/1000))/20;
-					Sprint(F("fTarget_uA_per_sec:"));Sprintln(fTarget_uA_per_sec);
+					float fTarget_uA_per_sec = (0.4/(float(ldT)/1000))/20;	//Slew rate to which it should be reduced before we consider it settled
 					SettledSleepCurrent_uA_reached(fTarget_uA_per_sec, lTimeOut_Settled_SleepCurrent_ms);
 					SleepCurrent_uA = uAperBit3*GetAvgADCBits(iNrCurrentMeasurements);	//Even if SettledSleepCurrent_uA_reached has timed out it should have settled by now
 				}
@@ -557,7 +550,7 @@ void statemachine()
 					SleepCurrent_uA = 20000001;			//Will show ERR CAP on display
 				}
 			}
-			else {SleepCurrent_uA = SleepCurrent_uA_no_display;Sprintln(F("Step2"));}
+			else {SleepCurrent_uA = SleepCurrent_uA_intermediate;}
 //			Sprint(F("SleepCurrent_uA:"));Sprintln(SleepCurrent_uA);
 			
 			//Restore standby power state
@@ -838,7 +831,6 @@ unsigned long Time_to_reach_InitCurrent_uA(float Threshold_current_uA, unsigned 
 		delay_with_update(50);	//don't measure to often as it will load the sleep current too much.
 		Current_uA = uAperBit3*GetAvgADCBits(iNrCurrentMeasurements);
 		ldT = (millis()-lTstart);
-		Sprint(F("dT:"));Sprintln(ldT);
 	}
 	return ldT;
 }
@@ -852,20 +844,14 @@ bool SettledSleepCurrent_uA_reached(float Threshold_current_uA_per_sec, unsigned
 	unsigned long lT_last_meas = lTstart;
 	int n=0;
 	unsigned long lTimeScaler = constrain(100/Threshold_current_uA_per_sec,100,15000);//don't measure to often as it will load the sleep current too much.
-	Sprint(F("lTimeScaler:"));Sprintln(lTimeScaler);
 	while ((n<2) & ((millis()-lTstart)<lTimeOut)){
 		delay_with_update(lTimeScaler);
 		Current_uA_new 		= uAperBit3*GetAvgADCBits(iNrCurrentMeasurements);
 		lT_last_meas 		= millis();
 		Current_uA_per_sec 	= (Current_uA_new - Current_uA_prev)/(float(lTimeScaler)/1000);
-		Sprint(F("Current_uA_per_sec:"));Sprintln(Current_uA_per_sec);
 		Current_uA_prev = Current_uA_new;
-		if (Current_uA_per_sec < Threshold_current_uA_per_sec){
-			n++;
-		}
-		else{
-			n=0;
-		}
+		if (Current_uA_per_sec < Threshold_current_uA_per_sec){n++;}
+		else{n=0;}
 	}
 	if (Current_uA_per_sec < Threshold_current_uA_per_sec){bReached = true;}
 	return bReached;
