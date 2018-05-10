@@ -191,7 +191,18 @@ static Bounce button = Bounce();
 #define CHILD_ID_COUNTER 0
 #define CHILD_ID_UPDATE_GATEWAY 0
 MyMessage MsgCounter(CHILD_ID_COUNTER, V_CUSTOM);   				//Send Message Counter value
-#define DELAY_BETWEEN_MESSAGES_MICROS 500000						//Normal Interval between messages
+
+// Actual data exchanged in a message 
+#define PAYLOAD_LENGTH_MIN         (2)				//The counter is always transmitted and is 2 bytes in size
+#define PAYLOAD_LENGTH_MAX (MAX_PAYLOAD)
+static size_t g_payloadLen = PAYLOAD_LENGTH_MIN;
+#pragma pack(push, 1)								// exact fit - no padding (to save space)
+union t_MessageData {
+  uint16_t m_count;
+  uint8_t m_dynMessage[MAX_PAYLOAD];
+};
+#pragma pack(pop)									//back to the previous packing mode
+
 
 //**** Monitoring Constants&Variables ****
 const int iMaxNumberOfMessages = 100 ;           					// Number of Messages Used for MA calculation
@@ -582,7 +593,10 @@ void statemachine()
 /*****************************************************************************/
 void receive(const MyMessage &message) {
 	if (message.isAck() == 1 && message.type == V_CUSTOM && message.sensor==CHILD_ID_COUNTER){	//Acknowledge message & of correct type
-		uint16_t iNewMessage = message.getUInt();           // get received value
+		const t_MessageData& data = *(static_cast<t_MessageData*>(message.getCustom()));
+		
+		uint16_t iNewMessage = data.m_count;           // get received value
+		Sprint("iNewMessage:");Sprintln(iNewMessage);
 		uint16_t iIndexInArray = iNewMessage % iMaxNumberOfMessages;
 		bArrayNAckMessages[iIndexInArray] = 0; 			// set corresponding flag to received.
 		
@@ -595,11 +609,14 @@ void receive(const MyMessage &message) {
 	}
 }
 
-void transmit() {
+void transmit(size_t g_payloadLen) {
 	static int iIndexInArrayFailedMessages  = 0 ;
 	static int iIndexInArrayTimeMessages  = 0 ;	
-
+	static t_MessageData MessageData;
+	
 	iMessageCounter++;
+	MessageData.m_count = iMessageCounter;
+	
 	// Cyclic Index counters of arrays
 	iIndexInArrayFailedMessages = iMessageCounter % iMaxNumberOfMessages;
 	iIndexInArrayTimeMessages 	= iMessageCounter % iNrTimeDelays;
@@ -614,7 +631,7 @@ void transmit() {
 	
 	// Transmit message with software ack request (returned in "receive function"),
 	// the boolean returned here is a Hardware hop-to-hop Ack
-	boolean success = send(MsgCounter.setDestination(iDestinationNode).set(iMessageCounter), true);
+	boolean success = send(MsgCounter.setDestination(iDestinationNode).set(&MessageData,g_payloadLen), true);
 	if (!success) {
 		lTimeDelayBuffer_FirstHop_us[iIndexInArrayTimeMessages] = 0;	//It failed, so I can't use it to determine a First Hop Delay (i.e. it is "infinite" delay as it failed)
 		bArrayFailedMessages[iIndexInArrayFailedMessages] = true;	//Log it as a failed message (for rolling average)
