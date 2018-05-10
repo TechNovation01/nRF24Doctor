@@ -368,13 +368,13 @@ void ISR_TransmitTriggerADC(){
 	iStartStorageAfterNrAdcSamples  = 7; 	//Note this depends on the set ADC prescaler (currently: 16x prescaler) + Matched to TX timing
 	switch (iRf24DataRate){
 		case 0:
-			iStopStorageAfterNrAdcSamples 	= 12; 	//Note this depends on the set ADC prescaler (currently: 16x prescaler)	+ Matched to TX timing		
+			iStopStorageAfterNrAdcSamples 	= 12 + uint8_t(iPayloadSize*0.25); 	//Note this depends on the set ADC prescaler (currently: 16x prescaler)	+ Matched to TX timing		
 			break;
 		case 1:
-			iStopStorageAfterNrAdcSamples 	= 10; 	//Note this depends on the set ADC prescaler (currently: 16x prescaler)	+ Matched to TX timing
+			iStopStorageAfterNrAdcSamples 	= 8 + uint8_t(iPayloadSize*0.125); 	//Note this depends on the set ADC prescaler (currently: 16x prescaler)	+ Matched to TX timing
 			break;
 		case 2:
-			iStopStorageAfterNrAdcSamples 	= 28; 	//Note this depends on the set ADC prescaler (currently: 16x prescaler)	+ Matched to TX timing		
+			iStopStorageAfterNrAdcSamples 	= 25 + uint8_t(iPayloadSize*1.4); 	//Note this depends on the set ADC prescaler (currently: 16x prescaler)	+ Matched to TX timing		
 			break;
 	}
 	
