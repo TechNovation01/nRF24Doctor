@@ -144,21 +144,22 @@ LCDML_addAdvanced (2  , LCDML_0         , 3    , NULL              , "Counters  
 LCDML_addAdvanced (3  , LCDML_0         , 4    , NULL              , "TxRx Power   >"  , menuPage         , PAGE_TXRXPOWER   , _LCDML_TYPE_default);
 LCDML_addAdvanced (4  , LCDML_0         , 5    , NULL              , "Sleep Power  >"  , menuPage         , PAGE_SLEEPPOWER  , _LCDML_TYPE_default);
 LCDML_add         (5  , LCDML_0         , 6                        , "Settings     >"  , NULL);
-LCDML_addAdvanced (6  , LCDML_0_6       , 1    , NULL              , ""                , menuCfgChannel   , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (7  , LCDML_0_6       , 2    , NULL              , ""                , menuCfgGwNode    , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (8  , LCDML_0_6       , 3    , NULL              , ""                , menuCfgGwPa      , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (9  , LCDML_0_6       , 4    , NULL              , ""                , menuCfgNodePa    , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (10 , LCDML_0_6       , 5    , NULL              , ""                , menuCfgRate      , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (11 , LCDML_0_6       , 6    , NULL              , ""                , menuCfgRadioId   , 0                , _LCDML_TYPE_dynParam);
-LCDML_add         (12 , LCDML_0_6       , 7                        , "Reset buff   x"  , menuResetBuf);
-LCDML_add         (13 , LCDML_0_6       , 8                        , "Eeprom       >"  , NULL);
-LCDML_add         (14 , LCDML_0_6_8     , 1                        , "Save node    x"  , menuSaveNodeEeprom);
-LCDML_add         (15 , LCDML_0_6_8     , 2                        , "Save node&gw x"  , menuSaveNodeAndGwEeprom);
-LCDML_add         (16 , LCDML_0_6_8     , 3                        , "Load node    x"  , menuLoadNodeEeprom);
-LCDML_add         (17 , LCDML_0_6_8     , 4                        , "Defaults     x"  , menuDefaultNodeEeprom);
-LCDML_add         (18 , LCDML_0_6_8     , 5                        , "Back         <"  , menuBack);
-LCDML_add         (19 , LCDML_0_6       , 9                        , "Back         <"  , menuBack);
-#define _LCDML_DISP_cnt    19   // Should equal last id in menu
+LCDML_addAdvanced (6  , LCDML_0_6       , 1    , NULL              , ""  			   , menuCfgPayload   , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (7  , LCDML_0_6       , 2    , NULL              , ""                , menuCfgChannel   , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (8  , LCDML_0_6       , 3    , NULL              , ""                , menuCfgGwNode    , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (9  , LCDML_0_6       , 4    , NULL              , ""                , menuCfgGwPa      , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (10 , LCDML_0_6       , 5    , NULL              , ""                , menuCfgNodePa    , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (11 , LCDML_0_6       , 6    , NULL              , ""                , menuCfgRate      , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (12 , LCDML_0_6       , 7    , NULL              , ""                , menuCfgRadioId   , 0                , _LCDML_TYPE_dynParam);
+LCDML_add         (13 , LCDML_0_6       , 8                        , "Reset buff   x"  , menuResetBuf);
+LCDML_add         (14 , LCDML_0_6       , 9                        , "Eeprom       >"  , NULL);
+LCDML_add         (15 , LCDML_0_6_9     , 1                        , "Save node    x"  , menuSaveNodeEeprom);
+LCDML_add         (16 , LCDML_0_6_9     , 2                        , "Save node&gw x"  , menuSaveNodeAndGwEeprom);
+LCDML_add         (17 , LCDML_0_6_9     , 3                        , "Load node    x"  , menuLoadNodeEeprom);
+LCDML_add         (18 , LCDML_0_6_9     , 4                        , "Defaults     x"  , menuDefaultNodeEeprom);
+LCDML_add         (19 , LCDML_0_6_9     , 5                        , "Back         <"  , menuBack);
+LCDML_add         (20 , LCDML_0_6       , 10                       , "Back         <"  , menuBack);
+#define _LCDML_DISP_cnt    20   // Should equal last id in menu
 
 
 
@@ -185,14 +186,22 @@ static Bounce button = Bounce();
 #define EEPROM_DATARATE			4
 #define EEPROM_BASE_RADIO_ID	5
 #define EEPROM_DESTINATION_NODE	6
-#define EEPROM_SEND_REPEATS		7
+#define EEPROM_PAYLOAD_SIZE		7
 
 //**** MySensors Messages ****
 #define CHILD_ID_COUNTER 0
 #define CHILD_ID_UPDATE_GATEWAY 0
-static MyMessage MsgCounter(CHILD_ID_COUNTER, V_CUSTOM);   				//Send Message Counter value
-static MyMessage g_txMsgPingPong;
-#define DELAY_BETWEEN_MESSAGES_MICROS 500000						//Normal Interval between messages
+MyMessage MsgCounter(CHILD_ID_COUNTER, V_CUSTOM);   				//Send Message Counter value
+
+// Actual data exchanged in a message 
+#define PAYLOAD_LENGTH_MIN         (2)				//The counter is always transmitted and is 2 bytes in size
+#define PAYLOAD_LENGTH_MAX (MAX_PAYLOAD)
+#pragma pack(push, 1)								// exact fit - no padding (to save space)
+union t_MessageData {
+  uint8_t m_dynMessage[MAX_PAYLOAD];
+};
+#pragma pack(pop)									//back to the previous packing mode
+
 
 //**** Monitoring Constants&Variables ****
 const int iMaxNumberOfMessages = 100 ;           					// Number of Messages Used for MA calculation
@@ -222,12 +231,14 @@ uint8_t iRf24PaLevelGw;		//PA Level for the Gateway
 uint8_t iRf24DataRate;
 uint8_t iRf24BaseRadioId;
 uint8_t iDestinationNode;
+uint8_t iPayloadSize;
 #define DEFAULT_RF24_CHANNEL		(MY_RF24_CHANNEL)
 #define DEFAULT_RF24_PA_LEVEL_NODE	(MY_RF24_PA_LEVEL)
 #define DEFAULT_RF24_PA_LEVEL_GW	(MY_RF24_PA_LEVEL)
 #define DEFAULT_RF24_DATARATE		(MY_RF24_DATARATE)
 #define DEFAULT_RF24_BASE_ID_IDX	(0)
 #define DEFAULT_DESTINATION_NODE	(0)				// Default 0 = gateway, Settable in Menu
+#define DEFAULT_PAYLOAD_SIZE		(2)				// 2 Bytes is the minimum for the Counter data
 
 //**** Timing ****
 const uint8_t iNrTimeDelays = 10;
@@ -364,13 +375,13 @@ void ISR_TransmitTriggerADC(){
 	iStartStorageAfterNrAdcSamples  = 7; 	//Note this depends on the set ADC prescaler (currently: 16x prescaler) + Matched to TX timing
 	switch (iRf24DataRate){
 		case 0:
-			iStopStorageAfterNrAdcSamples 	= 12; 	//Note this depends on the set ADC prescaler (currently: 16x prescaler)	+ Matched to TX timing		
+			iStopStorageAfterNrAdcSamples 	= 12 + uint8_t(iPayloadSize*0.25); 	//Note this depends on the set ADC prescaler (currently: 16x prescaler)	+ Matched to TX timing		
 			break;
 		case 1:
-			iStopStorageAfterNrAdcSamples 	= 10; 	//Note this depends on the set ADC prescaler (currently: 16x prescaler)	+ Matched to TX timing
+			iStopStorageAfterNrAdcSamples 	= 8 + uint8_t(iPayloadSize*0.125); 	//Note this depends on the set ADC prescaler (currently: 16x prescaler)	+ Matched to TX timing
 			break;
 		case 2:
-			iStopStorageAfterNrAdcSamples 	= 28; 	//Note this depends on the set ADC prescaler (currently: 16x prescaler)	+ Matched to TX timing		
+			iStopStorageAfterNrAdcSamples 	= 25 + uint8_t(iPayloadSize*1.4); 	//Note this depends on the set ADC prescaler (currently: 16x prescaler)	+ Matched to TX timing		
 			break;
 	}
 	
@@ -485,7 +496,8 @@ void statemachine()
 			// Transmit Current Measurement
 			EIFR |= 0x01;					//Clear interrupt flag to prevent an immediate trigger
 			attachPCINT(digitalPinToPinChangeInterrupt(MY_RF24_CE_PIN), ISR_TransmitTriggerADC,RISING);
-			transmit();
+			transmit(iPayloadSize);
+			
 			stateEnteredTimestampUs = micros();
 			currState = STATE_TX_WAIT;
 			break;			
@@ -610,16 +622,9 @@ void statemachine()
 /*****************************************************************************/
 void receive(const MyMessage &message) {
 	if (message.isAck() == 1 && message.type == V_CUSTOM && message.sensor==CHILD_ID_COUNTER){	//Acknowledge message & of correct type
-		byte *tempbyte = message.getCustom();           // get received value
-		//uint16_t iNewMessage = message.getCustom();           // get received value
+		const t_MessageData& ReceivedData = *(static_cast<t_MessageData*>(message.getCustom()));
+		uint16_t iNewMessage = ((uint16_t)ReceivedData.m_dynMessage[0] << 8)|((uint16_t)ReceivedData.m_dynMessage[1]); //2 Byte Counter
 
-		byte temp = *tempbyte;
-		Sprint(temp);Sprint("\t");
-		for (int n=0; n<MAX_PAYLOAD-1; n++){
-			byte temp = tempbyte[n];
-			Sprint(temp);Sprint("\t");
-		}
-		Sprintln();
 		uint16_t iIndexInArray = iNewMessage % iMaxNumberOfMessages;
 		bArrayNAckMessages[iIndexInArray] = 0; 			// set corresponding flag to received.
 		
@@ -632,11 +637,17 @@ void receive(const MyMessage &message) {
 	}
 }
 
-void transmit() {
+void transmit(size_t iPayloadLength) {
 	static int iIndexInArrayFailedMessages  = 0 ;
 	static int iIndexInArrayTimeMessages  = 0 ;	
+	static t_MessageData MessageData;
 
+	iPayloadLength = constrain(iPayloadLength,PAYLOAD_LENGTH_MIN,PAYLOAD_LENGTH_MAX);	
 	iMessageCounter++;
+	MessageData.m_dynMessage[0] = (uint8_t)((iMessageCounter & 0xFF00) >> 8);
+	MessageData.m_dynMessage[1] = (uint8_t)(iMessageCounter & 0x00FF);
+	//All other MessageData is just left undefined
+
 	// Cyclic Index counters of arrays
 	iIndexInArrayFailedMessages = iMessageCounter % iMaxNumberOfMessages;
 	iIndexInArrayTimeMessages 	= iMessageCounter % iNrTimeDelays;
@@ -651,22 +662,7 @@ void transmit() {
 	
 	// Transmit message with software ack request (returned in "receive function"),
 	// the boolean returned here is a Hardware hop-to-hop Ack
-	//boolean success = send(MsgCounter.setDestination(iDestinationNode).set(iMessageCounter), true);
-	
-	// static bool first = true;
-	// static t_pingPongData pingPongData;
-	// pingPongData.m_count = first ? 0u : (pingPongData.m_count + 1);
-	
-	byte myByteArray[MAX_PAYLOAD];
-	myByteArray[0]=iMessageCounter;
-	g_txMsgPingPong.set(&myByteArray, sizeof(myByteArray));
-
-	// uint64_t value = 15;
-	// g_txMsgPingPong.set(&value, sizeof(value) );
-	boolean success = send(g_txMsgPingPong, true);
-	success = send(g_txMsgPingPong, false);
-	success = send(g_txMsgPingPong, false);
-	
+	boolean success = send(MsgCounter.setDestination(iDestinationNode).set(&MessageData,iPayloadLength), true);
 	if (!success) {
 		lTimeDelayBuffer_FirstHop_us[iIndexInArrayTimeMessages] = 0;	//It failed, so I can't use it to determine a First Hop Delay (i.e. it is "infinite" delay as it failed)
 		bArrayFailedMessages[iIndexInArrayFailedMessages] = true;	//Log it as a failed message (for rolling average)
@@ -718,6 +714,7 @@ void loadDefaults()
 	iRf24DataRate		= DEFAULT_RF24_DATARATE;
 	iRf24BaseRadioId	= DEFAULT_RF24_BASE_ID_IDX;
 	iDestinationNode	= DEFAULT_DESTINATION_NODE;
+	iPayloadSize		= DEFAULT_PAYLOAD_SIZE;
 	if (iRf24BaseRadioId < COUNT_OF(RF24_BASE_ID_VARS))
 	{
 		memcpy(RF24_BASE_ID_VAR, RF24_BASE_ID_VARS[iRf24BaseRadioId], sizeof(RF24_BASE_ID_VAR));
@@ -735,6 +732,7 @@ void LoadStatesFromEEPROM()
 		iRf24DataRate 		= loadState(EEPROM_DATARATE);
 		iRf24BaseRadioId	= loadState(EEPROM_BASE_RADIO_ID);
 		iDestinationNode	= loadState(EEPROM_DESTINATION_NODE);
+		iPayloadSize		= loadState(EEPROM_PAYLOAD_SIZE);
 		if (iRf24BaseRadioId < COUNT_OF(RF24_BASE_ID_VARS))
 		{
 			memcpy(RF24_BASE_ID_VAR, RF24_BASE_ID_VARS[iRf24BaseRadioId], sizeof(RF24_BASE_ID_VAR));
@@ -757,6 +755,7 @@ void SaveStatesToEepromAndReset()
 	saveState(EEPROM_DATARATE, iRf24DataRate);
 	saveState(EEPROM_BASE_RADIO_ID, iRf24BaseRadioId);
 	saveState(EEPROM_DESTINATION_NODE, iDestinationNode);
+	saveState(EEPROM_PAYLOAD_SIZE, iPayloadSize);
 	// Mark eeprom contents valid
 	saveState(EEPROM_FLAG, EEPROM_FLAG_MAGIC);
 
@@ -1043,6 +1042,22 @@ void menuCfgEntry( uint8_t &value )
 	if ((value > 0)   and LCDML.BT_checkDown()) value--;
 }
 
+void menuCfgPayload(uint8_t line)
+{ 
+	if (line == LCDML.MENU_getCursorPos()) 
+	{
+		menuCfgEntry( iPayloadSize );
+		iPayloadSize = constrain(iPayloadSize, PAYLOAD_LENGTH_MIN, PAYLOAD_LENGTH_MAX );
+	} 
+
+	char buf[LCD_COLS+1];
+	snprintf_P(buf, sizeof(buf), PSTR("Payload    %2d"), iPayloadSize);
+
+	// use the line from function parameters
+	lcd.setCursor(1, line);
+	lcd.print(buf); 
+}
+
 void menuCfgChannel(uint8_t line)
 { 
 	if (line == LCDML.MENU_getCursorPos()) 
@@ -1052,7 +1067,7 @@ void menuCfgChannel(uint8_t line)
 	} 
 
 	char buf[LCD_COLS+1];
-	snprintf_P(buf, sizeof(buf), PSTR("Channel   %d"), iRf24Channel);
+	snprintf_P(buf, sizeof(buf), PSTR("Channel   %3d"), iRf24Channel);
 
 	// use the line from function parameters
 	lcd.setCursor(1, line);
@@ -1067,13 +1082,12 @@ void menuCfgGwNode(uint8_t line)
 	} 
 
 	char buf[LCD_COLS+1];
-	snprintf_P(buf, sizeof(buf), PSTR("GW node   %d"), iDestinationNode);
+	snprintf_P(buf, sizeof(buf), PSTR("GW Node   %3d"), iDestinationNode);
 
 	// use the line from function parameters
 	lcd.setCursor(1, line);
 	lcd.print(buf); 
 }
-
 
 void menuCfgNodePa(uint8_t line)
 { 
@@ -1084,7 +1098,7 @@ void menuCfgNodePa(uint8_t line)
 	} 
 
 	char buf[LCD_COLS+1];
-	snprintf_P(buf, sizeof(buf), PSTR("Node pa   %s"), pcPaLevelNames[iRf24PaLevel]);
+	snprintf_P(buf, sizeof(buf), PSTR("NODE PA  %-4s"), pcPaLevelNames[iRf24PaLevel]);
 
 	// use the line from function parameters
 	lcd.setCursor(1, line);
@@ -1100,7 +1114,7 @@ void menuCfgGwPa(uint8_t line)
 	} 
 
 	char buf[LCD_COLS+1];
-	snprintf_P(buf, sizeof(buf), PSTR("GW pa     %s"), pcPaLevelNames[iRf24PaLevelGw]);
+	snprintf_P(buf, sizeof(buf), PSTR("GW PA    %-4s"), pcPaLevelNames[iRf24PaLevelGw]);
 
 	// use the line from function parameters
 	lcd.setCursor(1, line);
@@ -1116,7 +1130,7 @@ void menuCfgRate(uint8_t line)
 	} 
 
 	char buf[LCD_COLS+1];
-	snprintf_P(buf, sizeof(buf), PSTR("Datarate  %s"), pcDataRateNames[iRf24DataRate]);
+	snprintf_P(buf, sizeof(buf), PSTR("DATARATE %-4s"), pcDataRateNames[iRf24DataRate]);
 
 	// use the line from function parameters
 	lcd.setCursor(1, line);
