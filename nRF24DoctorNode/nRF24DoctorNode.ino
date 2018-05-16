@@ -481,17 +481,19 @@ void statemachine()
 			break;
 
 		case STATE_TX:
-			// Transmit Current Measurement
-			EIFR |= 0x01;					//Clear interrupt flag to prevent an immediate trigger
-			attachPCINT(digitalPinToPinChangeInterrupt(MY_RF24_CE_PIN), ISR_TransmitTriggerADC,RISING);
-			transmit(iPayloadSize);
-			
-			stateEnteredTimestampUs = micros();
-			currState = STATE_TX_WAIT;
-			break;			
-
+			//if (micros() - stateEnteredTimestampUs >= 100000)
+			//{
+				// Transmit Current Measurement
+				EIFR |= 0x01;					//Clear interrupt flag to prevent an immediate trigger
+				attachPCINT(digitalPinToPinChangeInterrupt(MY_RF24_CE_PIN), ISR_TransmitTriggerADC,RISING);
+				transmit(iPayloadSize);
+				
+				stateEnteredTimestampUs = micros();
+				currState = STATE_TX_WAIT;
+				break;			
+			//}
 		case STATE_TX_WAIT:
-			if (micros() - stateEnteredTimestampUs >= 100000)
+			if (micros() - stateEnteredTimestampUs >= 2500)
 			{
 				//Calculate Mean and Max Delays
 				getMeanAndMaxFromArray(&iMeanDelayFirstHop_ms,&iMaxDelayFirstHop_ms,lTimeDelayBuffer_FirstHop_us,iNrTimeDelays);
