@@ -263,7 +263,7 @@ const float uAperBit1 = ((Vref_volt/1024.0)/r1_ohm)*1.0e6;
 const float uAperBit2 = ((Vref_volt/1024.0)/r2_ohm)*1.0e6;
 const float uAperBit3 = ((Vref_volt/1024.0)/r3_ohm)*1.0e6;
 
-float SleepCurrent_uA 	 	= 0;
+float SleepCurrent_uA 	 	= 20000000;			//Will show WAIT on display
 float TransmitCurrent_uA 	= 0;
 float ReceiveCurrent_uA  	= 0;
 
@@ -339,6 +339,13 @@ void lcdml_menu_control(void)
 	prevPressed = pressed;
 }
 
+void delay_with_update(unsigned long delay_ms)
+{
+	unsigned long dTstart = millis();
+	while ((millis()-dTstart)< delay_ms){
+		LCDML.loop();
+	}
+}
 /*****************************************************************************/
 /******************************** ADC INTERRUPT ******************************/
 /*****************************************************************************/
@@ -383,7 +390,6 @@ void ISR_TransmitTriggerADC(){
 	bAdcDone 				= false;
 	ADCSRA |= bit (ADSC) | bit (ADIE);	  	//start new ADC conversion
 }
-
 
 /*****************************************************************************/
 /************************************ STARTUP ********************************/
@@ -508,31 +514,45 @@ void statemachine()
 					TransmitCurrent_uA 	= 10000000;	//Will show ERR on display
 					ReceiveCurrent_uA 	= 10000000;	//Will show ERR on display
 				}
-//				Sprint(F("TransmitCurrent_uA:"));Sprintln(TransmitCurrent_uA);
-//				Sprint(F("ReceiveCurrent_uA:"));Sprintln(ReceiveCurrent_uA);
-				currState = STATE_SLEEP;
+				//	Sprint(F("TransmitCurrent_uA:"));Sprintln(TransmitCurrent_uA);
+				//	Sprint(F("ReceiveCurrent_uA:"));Sprintln(ReceiveCurrent_uA);
+				currState = STATE_IDLE;
 			}
 			break;
 
 		case STATE_SLEEP:
+		{
 			//Sleep Current Measurement
 			transportDisable();
-			delay(10);									//Gate charge time and settle time, don't use wait as it will prevent the radio from sleep
-			SleepCurrent_uA = uAperBit1*GetAvgADCBits(iNrCurrentMeasurements);
-			if (SleepCurrent_uA < 10000){
+			delay_with_update(20);									//Gate charge time and settle time, don't use wait as it will prevent the radio from sleep
+			float SleepCurrent_uA_intermediate = uAperBit1*GetAvgADCBits(iNrCurrentMeasurements);
+			if (SleepCurrent_uA_intermediate < 1500){
 				//Set Higher Sensitivity: uAperBit2
 				digitalWrite(MOSFET_2P2OHM_PIN, LOW);
 				digitalWrite(MOSFET_100OHM_PIN, HIGH);
-				delay(10);								//settle time
-				SleepCurrent_uA = uAperBit2*GetAvgADCBits(iNrCurrentMeasurements);
+				delay_with_update(400);								//worst case settle time to charge through higher impedance
+				SleepCurrent_uA_intermediate = uAperBit2*GetAvgADCBits(iNrCurrentMeasurements);
 			}
-			if (SleepCurrent_uA < 100){
+			else {SleepCurrent_uA = SleepCurrent_uA_intermediate;}
+
+			if (SleepCurrent_uA_intermediate < 15){
 				//Set Higher Sensitivity: uAperBit3
 				digitalWrite(MOSFET_2P2OHM_PIN, LOW);
 				digitalWrite(MOSFET_100OHM_PIN, LOW);
-				delay(10);								//settle time
-				SleepCurrent_uA = uAperBit3*GetAvgADCBits(iNrCurrentMeasurements);
+				const float Init_Meas_SleepCurrent_uA = 0.4;
+				const unsigned long lTimeOut_InitCurrent_ms = 6000;
+				const unsigned long lTimeOut_Settled_SleepCurrent_ms = 30000;
+				unsigned long ldT  = Time_to_reach_InitCurrent_uA(Init_Meas_SleepCurrent_uA, lTimeOut_InitCurrent_ms);
+				if (ldT < lTimeOut_InitCurrent_ms){
+					float fTarget_uA_per_sec = (0.4/(float(ldT)/1000))/20;	//Slew rate to which it should be reduced before we consider it settled
+					SettledSleepCurrent_uA_reached(fTarget_uA_per_sec, lTimeOut_Settled_SleepCurrent_ms);
+					SleepCurrent_uA = uAperBit3*GetAvgADCBits(iNrCurrentMeasurements);	//Even if SettledSleepCurrent_uA_reached has timed out it should have settled by now
+				}
+				else{		//Radio Cap > 1000uF - this will take too long....
+					SleepCurrent_uA = 20000001;			//Will show ERR CAP on display
+				}
 			}
+			else {SleepCurrent_uA = SleepCurrent_uA_intermediate;}
 //			Sprint(F("SleepCurrent_uA:"));Sprintln(SleepCurrent_uA);
 			
 			//Restore standby power state
@@ -542,7 +562,7 @@ void statemachine()
 
 			currState = STATE_IDLE;
 			break;		
-
+		}
 		case STATE_START_GW_UPDATE:
 			updateGatewayAttemptsRemaining = updateGatewayNumAttempts;
 			currState = STATE_TX_GW_UPDATE;
@@ -800,9 +820,43 @@ float GetAvgADCBits(int iNrSamples) {
 	iAdcSum 				= 0;
 	bAdcDone 				= false;
 	ADCSRA |= bit (ADSC) | bit (ADIE);	  	//start new ADC conversion
-	while (!bAdcDone){delay(1);};			//Wait until all ADC conversions have completed
+	while (!bAdcDone){delay_with_update(1);};			//Wait until all ADC conversions have completed
 	bAdcDone 				= false;
 	return ((float)iAdcSum/(float)(iNrSamples));
+}
+
+unsigned long Time_to_reach_InitCurrent_uA(float Threshold_current_uA, unsigned long lTimeOut){
+	float Current_uA = 0;
+	unsigned long lTstart = millis();
+	unsigned long ldT = 0;
+	while ((Current_uA < Threshold_current_uA) & (ldT<lTimeOut)){
+		delay_with_update(50);	//don't measure to often as it will load the sleep current too much.
+		Current_uA = uAperBit3*GetAvgADCBits(iNrCurrentMeasurements);
+		ldT = (millis()-lTstart);
+	}
+	return ldT;
+}
+
+bool SettledSleepCurrent_uA_reached(float Threshold_current_uA_per_sec, unsigned long lTimeOut){
+	bool bReached = false;
+	float Current_uA_new = 0;
+	float Current_uA_prev = uAperBit3*GetAvgADCBits(iNrCurrentMeasurements);
+	float Current_uA_per_sec = 0;
+	unsigned long lTstart = millis();
+	unsigned long lT_last_meas = lTstart;
+	int n=0;
+	unsigned long lTimeScaler = constrain(100/Threshold_current_uA_per_sec,100,15000);//don't measure to often as it will load the sleep current too much.
+	while ((n<2) & ((millis()-lTstart)<lTimeOut)){
+		delay_with_update(lTimeScaler);
+		Current_uA_new 		= uAperBit3*GetAvgADCBits(iNrCurrentMeasurements);
+		lT_last_meas 		= millis();
+		Current_uA_per_sec 	= (Current_uA_new - Current_uA_prev)/(float(lTimeScaler)/1000);
+		Current_uA_prev = Current_uA_new;
+		if (Current_uA_per_sec < Threshold_current_uA_per_sec){n++;}
+		else{n=0;}
+	}
+	if (Current_uA_per_sec < Threshold_current_uA_per_sec){bReached = true;}
+	return bReached;
 }
 
 /*****************************************************************/
@@ -842,7 +896,13 @@ void LCD_clear() {
 /*****************************************************************/
 void printBufCurrent(char *buf, int iBufSize, float fCurrent_uA, const char* label) {
 	//Check range for proper displaying	
-	if (fCurrent_uA > 1000){
+	if (fCurrent_uA==20000000){
+		snprintf_P(buf, iBufSize, PSTR("%s[mA]=WAIT"), label);
+	}
+	else if (fCurrent_uA==20000001){
+		snprintf_P(buf, iBufSize, PSTR("%s[mA]=Err CAP"), label);
+	}	
+	else if (fCurrent_uA > 1000){
 		int Current_mA = (int)(fCurrent_uA/1000);
 		if (Current_mA>=300){
 			snprintf_P(buf, iBufSize, PSTR("%s[mA]= ERR"), label);
@@ -920,6 +980,7 @@ void menuPage(uint8_t param)
 			break;
 
 		case PAGE_SLEEPPOWER:
+			currState = STATE_SLEEP;
 			printBufCurrent(buf,sizeof(buf), SleepCurrent_uA, "SLEEP");
 			print_LCD_line(buf, 0, 0);
 			break;
