@@ -133,33 +133,35 @@ void lcdml_menu_control();
 static LCDMenuLib2_menu LCDML_0 (255, 0, 0, NULL, NULL); // root menu element (do not change)
 static LCDMenuLib2 LCDML(LCDML_0, LCD_ROWS, LCD_COLS, lcdml_menu_display, lcdml_menu_clear, lcdml_menu_control);
 
-enum page { PAGE_STATISTICS, PAGE_TIMING, PAGE_COUNTERS, PAGE_TXRXPOWER, PAGE_SLEEPPOWER };
+enum page { PAGE_STATISTICS, PAGE_TIMING, PAGE_MSGRATE, PAGE_COUNTERS, PAGE_TXRXPOWER, PAGE_SLEEPPOWER };
 
 // add            (id   prev_layer      new_num                      lang_char_array     callback_function)  
 // addAdvanced    (id   prev_layer      new_num  condition           lang_char_array     callback_function  parameter (0-255)  menu function type )
 //                                                                   "01234567890123"
 LCDML_addAdvanced (0  , LCDML_0         , 1    , NULL              , "Statistics   >"  , menuPage         , PAGE_STATISTICS  , _LCDML_TYPE_default);
 LCDML_addAdvanced (1  , LCDML_0         , 2    , NULL              , "Timing       >"  , menuPage         , PAGE_TIMING      , _LCDML_TYPE_default);
-LCDML_addAdvanced (2  , LCDML_0         , 3    , NULL              , "Counters     >"  , menuPage         , PAGE_COUNTERS    , _LCDML_TYPE_default);
-LCDML_addAdvanced (3  , LCDML_0         , 4    , NULL              , "TxRx Power   >"  , menuPage         , PAGE_TXRXPOWER   , _LCDML_TYPE_default);
-LCDML_addAdvanced (4  , LCDML_0         , 5    , NULL              , "Sleep Power  >"  , menuPage         , PAGE_SLEEPPOWER  , _LCDML_TYPE_default);
-LCDML_add         (5  , LCDML_0         , 6                        , "Settings     >"  , NULL);
-LCDML_addAdvanced (6  , LCDML_0_6       , 1    , NULL              , ""  			   , menuCfgPayload   , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (7  , LCDML_0_6       , 2    , NULL              , ""                , menuCfgChannel   , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (8  , LCDML_0_6       , 3    , NULL              , ""                , menuCfgGwNode    , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (9  , LCDML_0_6       , 4    , NULL              , ""                , menuCfgGwPa      , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (10 , LCDML_0_6       , 5    , NULL              , ""                , menuCfgNodePa    , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (11 , LCDML_0_6       , 6    , NULL              , ""                , menuCfgRate      , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (12 , LCDML_0_6       , 7    , NULL              , ""                , menuCfgRadioId   , 0                , _LCDML_TYPE_dynParam);
-LCDML_add         (13 , LCDML_0_6       , 8                        , "Reset buff   x"  , menuResetBuf);
-LCDML_add         (14 , LCDML_0_6       , 9                        , "Eeprom       >"  , NULL);
-LCDML_add         (15 , LCDML_0_6_9     , 1                        , "Save node    x"  , menuSaveNodeEeprom);
-LCDML_add         (16 , LCDML_0_6_9     , 2                        , "Save node&gw x"  , menuSaveNodeAndGwEeprom);
-LCDML_add         (17 , LCDML_0_6_9     , 3                        , "Load node    x"  , menuLoadNodeEeprom);
-LCDML_add         (18 , LCDML_0_6_9     , 4                        , "Defaults     x"  , menuDefaultNodeEeprom);
-LCDML_add         (19 , LCDML_0_6_9     , 5                        , "Back         <"  , menuBack);
-LCDML_add         (20 , LCDML_0_6       , 10                       , "Back         <"  , menuBack);
-#define _LCDML_DISP_cnt    20   // Should equal last id in menu
+LCDML_addAdvanced (2  , LCDML_0         , 3    , NULL              , "Msg Rate     >"  , menuPage         , PAGE_MSGRATE     , _LCDML_TYPE_default);
+LCDML_addAdvanced (3  , LCDML_0         , 4    , NULL              , "Counters     >"  , menuPage         , PAGE_COUNTERS    , _LCDML_TYPE_default);
+LCDML_addAdvanced (4  , LCDML_0         , 5    , NULL              , "TxRx Power   >"  , menuPage         , PAGE_TXRXPOWER   , _LCDML_TYPE_default);
+LCDML_addAdvanced (5  , LCDML_0         , 6    , NULL              , "Sleep Power  >"  , menuPage         , PAGE_SLEEPPOWER  , _LCDML_TYPE_default);
+LCDML_add         (6  , LCDML_0         , 7                        , "Settings     >"  , NULL);
+LCDML_addAdvanced (7  , LCDML_0_7       , 1    , NULL              , ""  			   , menuCfgPayload   , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (8  , LCDML_0_7       , 2    , NULL              , ""  			   , menuCfgMsgRate   , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (9  , LCDML_0_7       , 3    , NULL              , ""                , menuCfgChannel   , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (10 , LCDML_0_7       , 4    , NULL              , ""                , menuCfgGwNode    , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (11 , LCDML_0_7       , 5    , NULL              , ""                , menuCfgGwPa      , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (12 , LCDML_0_7       , 6    , NULL              , ""                , menuCfgNodePa    , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (13 , LCDML_0_7       , 7    , NULL              , ""                , menuCfgRate      , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (14 , LCDML_0_7       , 8    , NULL              , ""                , menuCfgRadioId   , 0                , _LCDML_TYPE_dynParam);
+LCDML_add         (15 , LCDML_0_7       , 9                        , "Reset buff   x"  , menuResetBuf);
+LCDML_add         (16 , LCDML_0_7       , 10                       , "Eeprom       >"  , NULL);
+LCDML_add         (17 , LCDML_0_7_10    , 1                        , "Save node    x"  , menuSaveNodeEeprom);
+LCDML_add         (18 , LCDML_0_7_10    , 2                        , "Save node&gw x"  , menuSaveNodeAndGwEeprom);
+LCDML_add         (19 , LCDML_0_7_10    , 3                        , "Load node    x"  , menuLoadNodeEeprom);
+LCDML_add         (20 , LCDML_0_7_10    , 4                        , "Defaults     x"  , menuDefaultNodeEeprom);
+LCDML_add         (21 , LCDML_0_7_10    , 5                        , "Back         <"  , menuBack);
+LCDML_add         (22 , LCDML_0_7       , 11                       , "Back         <"  , menuBack);
+#define _LCDML_DISP_cnt    22   // Should equal last id in menu
 
 
 
@@ -187,6 +189,7 @@ static Bounce button = Bounce();
 #define EEPROM_BASE_RADIO_ID	5
 #define EEPROM_DESTINATION_NODE	6
 #define EEPROM_PAYLOAD_SIZE		7
+#define EEPROM_MESSAGE_RATE		8
 
 //**** MySensors Messages ****
 #define CHILD_ID_COUNTER 0
@@ -201,7 +204,9 @@ union t_MessageData {
   uint8_t m_dynMessage[MAX_PAYLOAD];
 };
 #pragma pack(pop)									//back to the previous packing mode
-
+//Message Rate 
+uint8_t iSetMsgRate = 10;
+uint8_t iGetMsgRate = 0;
 
 //**** Monitoring Constants&Variables ****
 const int iMaxNumberOfMessages = 100 ;           					// Number of Messages Used for MA calculation
@@ -239,6 +244,7 @@ uint8_t iPayloadSize;
 #define DEFAULT_RF24_BASE_ID_IDX	(0)
 #define DEFAULT_DESTINATION_NODE	(0)				// Default 0 = gateway, Settable in Menu
 #define DEFAULT_PAYLOAD_SIZE		(2)				// 2 Bytes is the minimum for the Counter data
+#define DEFAULT_MESSAGE_RATE 		(10)
 
 //**** Timing ****
 const uint8_t iNrTimeDelays = 10;
@@ -468,7 +474,7 @@ static state currState = STATE_IDLE;
 void statemachine()
 {
 	static unsigned long stateEnteredTimestampUs = 0;
-
+	unsigned long iSetMsgDelay = (1000000L/iSetMsgRate);
 //	state prevState = currState;
 
 	switch (currState)
@@ -487,17 +493,19 @@ void statemachine()
 			break;
 
 		case STATE_TX:
-			// Transmit Current Measurement
-			EIFR |= 0x01;					//Clear interrupt flag to prevent an immediate trigger
-			attachPCINT(digitalPinToPinChangeInterrupt(MY_RF24_CE_PIN), ISR_TransmitTriggerADC,RISING);
-			transmit(iPayloadSize);
-			
-			stateEnteredTimestampUs = micros();
-			currState = STATE_TX_WAIT;
-			break;			
-
+			if ((micros() - stateEnteredTimestampUs) >= iSetMsgDelay)
+			{
+				// Transmit Current Measurement
+				EIFR |= 0x01;					//Clear interrupt flag to prevent an immediate trigger
+				attachPCINT(digitalPinToPinChangeInterrupt(MY_RF24_CE_PIN), ISR_TransmitTriggerADC,RISING);
+				transmit(iPayloadSize);
+				iGetMsgRate = (uint8_t)((1e6/(micros()-stateEnteredTimestampUs))+0.5);
+				stateEnteredTimestampUs = micros();
+				currState = STATE_TX_WAIT;
+				break;			
+			}
 		case STATE_TX_WAIT:
-			if (micros() - stateEnteredTimestampUs >= 100000)
+			if (micros() - stateEnteredTimestampUs >= 2500)	//Wait at least for Max TX time (=16 retransmits), So we are surely in RX mode
 			{
 				//Calculate Mean and Max Delays
 				getMeanAndMaxFromArray(&iMeanDelayFirstHop_ms,&iMaxDelayFirstHop_ms,lTimeDelayBuffer_FirstHop_us,iNrTimeDelays);
@@ -708,6 +716,7 @@ void loadDefaults()
 	iRf24BaseRadioId	= DEFAULT_RF24_BASE_ID_IDX;
 	iDestinationNode	= DEFAULT_DESTINATION_NODE;
 	iPayloadSize		= DEFAULT_PAYLOAD_SIZE;
+	iSetMsgRate			= DEFAULT_MESSAGE_RATE;
 	if (iRf24BaseRadioId < COUNT_OF(RF24_BASE_ID_VARS))
 	{
 		memcpy(RF24_BASE_ID_VAR, RF24_BASE_ID_VARS[iRf24BaseRadioId], sizeof(RF24_BASE_ID_VAR));
@@ -726,6 +735,7 @@ void LoadStatesFromEEPROM()
 		iRf24BaseRadioId	= loadState(EEPROM_BASE_RADIO_ID);
 		iDestinationNode	= loadState(EEPROM_DESTINATION_NODE);
 		iPayloadSize		= loadState(EEPROM_PAYLOAD_SIZE);
+		iSetMsgRate			= loadState(EEPROM_MESSAGE_RATE);	 
 		if (iRf24BaseRadioId < COUNT_OF(RF24_BASE_ID_VARS))
 		{
 			memcpy(RF24_BASE_ID_VAR, RF24_BASE_ID_VARS[iRf24BaseRadioId], sizeof(RF24_BASE_ID_VAR));
@@ -749,6 +759,7 @@ void SaveStatesToEepromAndReset()
 	saveState(EEPROM_BASE_RADIO_ID, iRf24BaseRadioId);
 	saveState(EEPROM_DESTINATION_NODE, iDestinationNode);
 	saveState(EEPROM_PAYLOAD_SIZE, iPayloadSize);
+	saveState(EEPROM_MESSAGE_RATE, iSetMsgRate);
 	// Mark eeprom contents valid
 	saveState(EEPROM_FLAG, EEPROM_FLAG_MAGIC);
 
@@ -963,6 +974,11 @@ void menuPage(uint8_t param)
 			print_LCD_line(buf, 1, 0);
 			break;
 
+		case PAGE_MSGRATE:
+			snprintf_P(buf, sizeof(buf), PSTR("MSG/SEC     %-3d"), iGetMsgRate);
+			print_LCD_line(buf, 0, 0);
+			break;
+
 		case PAGE_COUNTERS:
 			snprintf_P(buf, sizeof(buf), PSTR("MESSAGE COUNT:  "));
 			print_LCD_line(buf, 0, 0);
@@ -1038,6 +1054,21 @@ void menuCfgPayload(uint8_t line)
 
 	char buf[LCD_COLS+1];
 	snprintf_P(buf, sizeof(buf), PSTR("Payload    %2d"), iPayloadSize);
+
+	// use the line from function parameters
+	lcd.setCursor(1, line);
+	lcd.print(buf); 
+}
+
+void menuCfgMsgRate(uint8_t line)
+{ 
+	if (line == LCDML.MENU_getCursorPos()) 
+	{
+		menuCfgEntry( iSetMsgRate );
+	} 
+
+	char buf[LCD_COLS+1];
+	snprintf_P(buf, sizeof(buf), PSTR("Msg Rate  %3d"), iSetMsgRate);
 
 	// use the line from function parameters
 	lcd.setCursor(1, line);
