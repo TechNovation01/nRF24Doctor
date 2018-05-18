@@ -247,7 +247,7 @@ uint8_t iPayloadSize;
 #define DEFAULT_MESSAGE_RATE 		(10)
 
 //**** Timing ****
-const uint8_t iNrTimeDelays = 30;
+const uint8_t iNrTimeDelays = 10;
 uint16_t iMessageIndexBuffer[iNrTimeDelays];
 unsigned long lTimeOfTransmit_us[iNrTimeDelays];
 unsigned long lTimeDelayBuffer_Destination_us[iNrTimeDelays];
