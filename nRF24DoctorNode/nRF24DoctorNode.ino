@@ -502,8 +502,9 @@ void statemachine()
 				iGetMsgRate = (uint8_t)((1e6/(micros()-stateEnteredTimestampUs))+0.5);
 				stateEnteredTimestampUs = micros();
 				currState = STATE_TX_WAIT;
-				break;			
 			}
+			break;
+			
 		case STATE_TX_WAIT:
 			if (micros() - stateEnteredTimestampUs >= 2500)	//Wait at least for Max TX time (=16 retransmits), So we are surely in RX mode
 			{
