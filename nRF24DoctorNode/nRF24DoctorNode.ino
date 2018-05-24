@@ -508,7 +508,8 @@ void statemachine()
 				stateEnteredTimestampUs = micros();
 				currState = STATE_TX_WAIT;
 			}
-			break;	
+			break;
+      
 		case STATE_TX_WAIT:
 			if (micros() - stateEnteredTimestampUs >= 2500)	//Wait at least for Max TX time (=16 retransmits), So we are surely in RX mode
 			{
