@@ -683,10 +683,12 @@ void transmit(size_t iPayloadLength) {
 	}
 }
 
-uint8_t get_rf24_register_plos_cnt(){
-	return static_cast<uint8_t>((RF24_getObserveTX() & 0xF0)>>4);
-}
+// nRF24 register: packet loss counter
+// uint8_t get_rf24_register_plos_cnt(){
+// 	return static_cast<uint8_t>((RF24_getObserveTX() & 0xF0)>>4);
+// }
 
+// nRF24 register: AcknowledgeRequestCount Counter. Counts the number of (hardware) re-transmissions for the current transaction
 uint8_t get_rf24_register_arc_cnt(){
 	return static_cast<uint8_t>(RF24_getObserveTX() & 0x0F);
 }
