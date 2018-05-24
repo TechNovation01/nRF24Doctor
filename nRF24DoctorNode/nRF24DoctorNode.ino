@@ -208,6 +208,11 @@ union t_MessageData {
 uint8_t iSetMsgRate = 10;
 uint8_t iGetMsgRate = 0;
 
+const int iNrArcCnt = 15;
+uint8_t iArrayArcCnt[iNrArcCnt] = {0};
+uint8_t iArcCntAvg = 0;
+uint8_t iArcCntMax = 0;
+
 //**** Monitoring Constants&Variables ****
 const int iMaxNumberOfMessages = 100 ;           					// Number of Messages Used for MA calculation
 boolean bArrayFailedMessages[iMaxNumberOfMessages] = { 0 };     	// Array for moving average storage
@@ -504,11 +509,13 @@ void statemachine()
 				currState = STATE_TX_WAIT;
 			}
 			break;
-			
+      
 		case STATE_TX_WAIT:
 			if (micros() - stateEnteredTimestampUs >= 2500)	//Wait at least for Max TX time (=16 retransmits), So we are surely in RX mode
 			{
 				//Calculate Mean and Max Delays
+				store_ArcCnt_in_array();
+				getMeanAndMaxFromIntArray(&iArcCntAvg, &iArcCntMax, iArrayArcCnt, iNrArcCnt);
 				getMeanAndMaxFromArray(&iMeanDelayFirstHop_ms,&iMaxDelayFirstHop_ms,lTimeDelayBuffer_FirstHop_us,iNrTimeDelays);
 				getMeanAndMaxFromArray(&iMeanDelayDestination_ms,&iMaxDelayDestination_ms,lTimeDelayBuffer_Destination_us,iNrTimeDelays);
 
@@ -677,6 +684,23 @@ void transmit(size_t iPayloadLength) {
 	}
 }
 
+// nRF24 register: packet loss counter
+// uint8_t get_rf24_register_plos_cnt(){
+// 	return static_cast<uint8_t>((RF24_getObserveTX() & 0xF0)>>4);
+// }
+
+// nRF24 register: AcknowledgeRequestCount Counter. Counts the number of (hardware) re-transmissions for the current transaction
+uint8_t get_rf24_register_arc_cnt(){
+	return static_cast<uint8_t>(RF24_getObserveTX() & 0x0F);
+}
+
+void store_ArcCnt_in_array(){
+	static size_t iIndexInArray=0;
+	iIndexInArray++;
+	iIndexInArray = iIndexInArray % iNrArcCnt;
+	iArrayArcCnt[iIndexInArray] = get_rf24_register_arc_cnt();
+}
+
 /********************************************************************************/
 /************************ CONFIGURE nRF24 RADIO FUNCTIONS ***********************/
 /********************************************************************************/
@@ -796,6 +820,28 @@ void ClearStorageAndCounters() {
 		bArrayNAckMessages[n] = 0;
 	}
 	iNrNAckMessages = iMessageCounter = iNrFailedMessages = 0;
+}
+
+void getMeanAndMaxFromIntArray(uint8_t *mean_value, uint8_t *max_value, uint8_t *buffer, uint8_t size) {
+	//Note: excluding 0 values from mean calculation
+	boolean bNotZero = false;
+	uint8_t iMaxValue=0;	//max Array value
+	uint16_t sum=0;
+	for (int i=0; i < size; i++)
+	{
+		if (buffer[i] != 0){
+			sum 		= sum + static_cast<uint16_t>(buffer[i]);	
+			iMaxValue	= max(iMaxValue,buffer[i]);
+			bNotZero=true;
+		}
+	}
+	*max_value		= iMaxValue;
+	if (bNotZero){
+		*mean_value 	= static_cast<uint8_t>((sum / size)+0.5);
+	}
+	else {
+		*mean_value = 0;
+	}	
 }
 
 void getMeanAndMaxFromArray(uint16_t *mean_value, uint16_t *max_value, unsigned long *buffer, uint8_t size) {
@@ -976,8 +1022,10 @@ void menuPage(uint8_t param)
 			break;
 
 		case PAGE_MSGRATE:
-			snprintf_P(buf, sizeof(buf), PSTR("MSG/SEC     %-3d"), iGetMsgRate);
+			snprintf_P(buf, sizeof(buf), PSTR("MSG/SEC     %3d"), iGetMsgRate);
 			print_LCD_line(buf, 0, 0);
+			snprintf_P(buf, sizeof(buf), PSTR("ARC Avg%2d Max%2d"), iArcCntAvg,iArcCntMax);
+			print_LCD_line(buf, 1, 0);
 			break;
 
 		case PAGE_COUNTERS:
