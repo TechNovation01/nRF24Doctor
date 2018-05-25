@@ -470,7 +470,7 @@ void loop()
 
 enum state {	STATE_IDLE,
 				// Regular measurement states
-				STATE_TX, STATE_TX_WAIT, STATE_SLEEP,								
+				STATE_TX, STATE_RX, STATE_PROCESS_DATA, STATE_SLEEP,								
 				// Gateway update states
 				STATE_START_GW_UPDATE, STATE_TX_GW_UPDATE, STATE_FAILED_GW_UPDATE,
 };
@@ -478,9 +478,8 @@ static state currState = STATE_IDLE;
 
 void statemachine()
 {
-	static unsigned long stateEnteredTimestampUs = 0;
+	static unsigned long lTprevTransmit = 0;
 	unsigned long iSetMsgDelay = (1000000L/iSetMsgRate);
-//	state prevState = currState;
 
 	switch (currState)
 	{
@@ -493,45 +492,48 @@ void statemachine()
 			else
 			{
 				// Start of next measurement round
-				currState = STATE_TX;
+				if ((micros() - lTprevTransmit) >= iSetMsgDelay){currState = STATE_TX;}	//Message Rate limiter
 			}
 			break;
 
 		case STATE_TX:
-			if ((micros() - stateEnteredTimestampUs) >= iSetMsgDelay)
 			{
-				// Transmit Current Measurement
+				// Transmit Current Measurement - Trigger measurement on interrupt
 				EIFR |= 0x01;					//Clear interrupt flag to prevent an immediate trigger
 				attachPCINT(digitalPinToPinChangeInterrupt(MY_RF24_CE_PIN), ISR_TransmitTriggerADC,RISING);
-				transmit(iPayloadSize);
-				iGetMsgRate = (uint8_t)((1e6/(micros()-stateEnteredTimestampUs))+0.5);
-				stateEnteredTimestampUs = micros();
-				currState = STATE_TX_WAIT;
+				unsigned long lTcurTransmit = transmit(iPayloadSize);
+				
+				//Time rate of transmissions
+				iGetMsgRate = static_cast<uint8_t>((1e6/(lTcurTransmit-lTprevTransmit))+0.5);
+				lTprevTransmit = lTcurTransmit;
+
+				if (bAdcDone) {				//Get TX Current Measurement Data...it should already have finished
+					TransmitCurrent_uA 	= uAperBit1*((float)iAdcSum/(float)(iStopStorageAfterNrAdcSamples-iStartStorageAfterNrAdcSamples+1));
+					bAdcDone = false;
+				}				
+				else{Sprintln(F("BAD ADC TIMING:"));}
+				store_ArcCnt_in_array();	//Store the number of auto re-transmits by the radio in the array
+
+				currState = STATE_RX;
 			}
 			break;
       
-		case STATE_TX_WAIT:
-			if (micros() - stateEnteredTimestampUs >= 2500)	//Wait at least for Max TX time (=16 retransmits), So we are surely in RX mode
-			{
-				//Calculate Mean and Max Delays
-				store_ArcCnt_in_array();
-				getMeanAndMaxFromIntArray(&iArcCntAvg, &iArcCntMax, iArrayArcCnt, iNrArcCnt);
-				getMeanAndMaxFromArray(&iMeanDelayFirstHop_ms,&iMaxDelayFirstHop_ms,lTimeDelayBuffer_FirstHop_us,iNrTimeDelays);
-				getMeanAndMaxFromArray(&iMeanDelayDestination_ms,&iMaxDelayDestination_ms,lTimeDelayBuffer_Destination_us,iNrTimeDelays);
-
-				//Did we have a correct trigger of the ADC (i.e. a correct transmit), then it should have completed already...
-				if (bAdcDone) {
-					TransmitCurrent_uA 	= uAperBit1*((float)iAdcSum/(float)(iStopStorageAfterNrAdcSamples-iStartStorageAfterNrAdcSamples+1));
-					ReceiveCurrent_uA 	= uAperBit1*GetAvgADCBits(iNrCurrentMeasurements);
-				} else {
-					// Current Measurement could not be completed...probably because the transmit failed
-					TransmitCurrent_uA 	= 10000000;	//Will show ERR on display
-					ReceiveCurrent_uA 	= 10000000;	//Will show ERR on display
-				}
+		case STATE_RX:
+				MY_RF24_startListening();	//Make sure I'm in RX mode
+				ReceiveCurrent_uA 	= uAperBit1*GetAvgADCBits(iNrCurrentMeasurements);
+				//MY_RF24_stopListening();	//I will automatically get out of RX mode when applicable
 				//	Sprint(F("TransmitCurrent_uA:"));Sprintln(TransmitCurrent_uA);
 				//	Sprint(F("ReceiveCurrent_uA:"));Sprintln(ReceiveCurrent_uA);
-				currState = STATE_IDLE;
-			}
+				currState = STATE_PROCESS_DATA;
+			break;
+
+		case STATE_PROCESS_DATA:
+			//Calculate Mean & Max Values for display purposes
+			getMeanAndMaxFromIntArray(&iArcCntAvg, &iArcCntMax, iArrayArcCnt, iNrArcCnt);
+			getMeanAndMaxFromArray(&iMeanDelayFirstHop_ms,&iMaxDelayFirstHop_ms,lTimeDelayBuffer_FirstHop_us,iNrTimeDelays);
+			getMeanAndMaxFromArray(&iMeanDelayDestination_ms,&iMaxDelayDestination_ms,lTimeDelayBuffer_Destination_us,iNrTimeDelays);
+			
+			currState = STATE_IDLE;
 			break;
 
 		case STATE_SLEEP:
@@ -620,10 +622,6 @@ void statemachine()
 		default:
 			break;
 	}
-	// if (currState != prevState)
-	// {
-	// 	Sprint(prevState); Sprint(F(" -> ")); Sprintln(currState);
-	// }
 }
 
 /*****************************************************************************/
@@ -646,7 +644,7 @@ void receive(const MyMessage &message) {
 	}
 }
 
-void transmit(size_t iPayloadLength) {
+unsigned long transmit(size_t iPayloadLength) {
 	static int iIndexInArrayFailedMessages  = 0 ;
 	static int iIndexInArrayTimeMessages  = 0 ;	
 	static t_MessageData MessageData;
@@ -682,6 +680,7 @@ void transmit(size_t iPayloadLength) {
 //		unsigned long temptime = lTimeDelayBuffer_FirstHop_us[iIndexInArrayTimeMessages];
 		bArrayFailedMessages[iIndexInArrayFailedMessages] = false;	//Log it as a not-failed = succesful message (for rolling average)
 	}
+	return lTimeOfTransmit_us[iIndexInArrayTimeMessages];
 }
 
 // nRF24 register: packet loss counter
@@ -700,6 +699,29 @@ void store_ArcCnt_in_array(){
 	iIndexInArray = iIndexInArray % iNrArcCnt;
 	iArrayArcCnt[iIndexInArray] = get_rf24_register_arc_cnt();
 }
+
+void MY_RF24_startListening()
+{
+	// toggle PRX
+	RF24_setRFConfiguration(RF24_CONFIGURATION | _BV(RF24_PWR_UP) | _BV(RF24_PRIM_RX) );
+	// all RX pipe addresses must be unique, therefore skip if node ID is RF24_BROADCAST_ADDRESS
+	if(RF24_NODE_ADDRESS!= RF24_BROADCAST_ADDRESS) {
+		RF24_setPipeLSB(RF24_REG_RX_ADDR_P0, RF24_NODE_ADDRESS);
+	}
+	// start listening
+	RF24_ce(HIGH);
+}
+
+// void MY_RF24_stopListening()
+// {
+// 	RF24_DEBUG(PSTR("RF24:SPL\n"));	// stop listening
+// 	RF24_ce(LOW);
+// 	// timing
+// 	delayMicroseconds(130);
+// 	RF24_setRFConfiguration(RF24_CONFIGURATION | _BV(RF24_PWR_UP) );
+// 	// timing
+// 	delayMicroseconds(100);
+// }
 
 /********************************************************************************/
 /************************ CONFIGURE nRF24 RADIO FUNCTIONS ***********************/
