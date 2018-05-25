@@ -511,7 +511,7 @@ void statemachine()
 					TransmitCurrent_uA 	= uAperBit1*((float)iAdcSum/(float)(iStopStorageAfterNrAdcSamples-iStartStorageAfterNrAdcSamples+1));
 					bAdcDone = false;
 				}				
-				else{Sprintln(F("BAD ADC TIMING:"));}
+				//else{Sprintln(F("BAD ADC TIMING:"));} //Will happen if the node can not find the gateway @ startup - but no problem.
 				store_ArcCnt_in_array();	//Store the number of auto re-transmits by the radio in the array
 
 				currState = STATE_RX;
@@ -612,9 +612,7 @@ void statemachine()
 			break;
 
 		case STATE_FAILED_GW_UPDATE:
-			// TODO: Signal the UI that GW update failed
-			// ??? LoadStatesFromEEPROM(); ???
-			// Signal update sequence finished (and failed, as it didn't reset afterwards)
+			// Signals the UI that GW update failed. On next button/encoder change => return to prev menu
 			bUpdateGateway = false;
 			currState = STATE_IDLE;
 			break;
@@ -1275,11 +1273,12 @@ void menuSaveNodeAndGwEeprom(__attribute__((unused)) uint8_t param)
 		// Trigger the gateway update sequence
 		bUpdateGateway = true;
 		LCD_clear();
+		LCDML.FUNC_setLoopInterval(100);
 	}
 
 	if (LCDML.FUNC_loop())
 	{
-		static bool prevUpdateGateway = false;
+		static bool prevUpdateGateway = true;
 		if (not bUpdateGateway)
 		{
 			// Gateway update finished with error
