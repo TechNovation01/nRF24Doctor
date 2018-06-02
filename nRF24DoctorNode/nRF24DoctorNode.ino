@@ -223,7 +223,6 @@ uint16_t iMaxDelayDestination_ms = 0;
 //**** Current Measurement ****
 #include <PinChangeInterrupt.h>					// for Pin Change Interrupt      Download: https://github.com/NicoHood/PinChangeInterrupt
 const uint8_t iNrCurrentMeasurements 	= 60;	//Nr of measurements for averaging current. <64 to prevent risk of overflow of iAdcSum
-
 const float r1_ohm    = 2.2;
 const float r2_ohm    = 100.0;
 const float r3_ohm    = 10000.0;
@@ -286,12 +285,12 @@ void lcdml_menu_control(void)
 		int8_t delta = enc - encPrev;
 		if (delta <= -encStep)
 		{
-			LCDML.BT_up();
+			LCDML.BT_down();
 			encPrev -= encStep;
 		}
 		else if (delta >= encStep)
 		{
-			LCDML.BT_down();
+			LCDML.BT_up();
 			encPrev += encStep;
 		}
 		else
