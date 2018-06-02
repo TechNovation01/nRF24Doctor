@@ -58,55 +58,15 @@ Change log:
 //**** MySensors - Radio *****
 #define MY_RADIO_NRF24                  	// Enable and select radio type attached
 
-#define CHARACTER_DISPLAY
-
 #include <SPI.h>
 #include <MySensors.h>
 
 //**** LCD *****
-#ifdef CHARACTER_DISPLAY
-	//#include <LiquidCrystal_I2C.h>                // LCD display with I2C interface
-	#include <LiquidCrystal.h>                      // LCD display with parallel interface
+#include <LiquidCrystal.h>                      // LCD display with parallel interface
 
-	#define LCD_COLS 16
-	#define LCD_ROWS 2
-	//LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);  	// Set the LCD I2C address
-	//LiquidCrystal_I2C lcd(0x27, 16, 2);  								// Set the LCD I2C address
-	LiquidCrystal lcd(LCD_RS,LCD_ENABLE, LCD_D4, LCD_D5, LCD_D6, LCD_D7); // LCD with parallel interface
-#else
-	#include <Adafruit_GFX.h>
-	#include <TFT_ILI9163C.h>
-
-	// Color definitions. BLACK & WHITE are defined in library.
-	#define BLUE            (0x001F)
-	#define RED             (0xF800)
-	#define GREEN           (0x07E0)
-	#define CYAN            (0x07FF)
-	#define MAGENTA         (0xF81F)
-	#define YELLOW          (0xFFE0)
-
-	#define COLOR_BG        (BLACK)
-	#define COLOR_TEXT      (WHITE)
-	#define COLOR_UNIT      (CYAN)
-	#define COLOR_SETACT    (RED)
-
-	#define TFT_WIDTH       (128)
-	#define TFT_HEIGHT      (128)
-
-	#define TEXT_SIZE       (1)
-	#define CHAR_HEIGHT     (8)
-	#define CHAR_WIDTH      (8)
-
-	#define LCD_COLS        ((TFT_WIDTH)/(CHAR_WIDTH))
-	#define LCD_ROWS        (2)	// for now
-
-	#define TEXT_HEIGHT(c)  ((c)*CHAR_HEIGHT)
-	#define TEXT_WIDTH(c)   ((c)*CHAR_WIDTH)
-
-	#define TFT_PIN_CS      (8)
-	#define TFT_PIN_DC      (7)
-	static TFT_ILI9163C tft(TFT_PIN_CS, TFT_PIN_DC);
-#endif
+#define LCD_COLS 16
+#define LCD_ROWS 2
+LiquidCrystal lcd(LCD_RS,LCD_ENABLE, LCD_D4, LCD_D5, LCD_D6, LCD_D7); // LCD with parallel interface
 
 
 //**** LCD Menu *****
@@ -116,7 +76,6 @@ Change log:
 #define _LCDML_DISP_rows             LCD_ROWS
 #define _LCDML_DISP_cfg_scrollbar    1      // enable a scrollbar
 
-#ifdef CHARACTER_DISPLAY
 const uint8_t scroll_bar[][8] = {
 	{B10001, B10001, B10001, B10001, B10001, B10001, B10001, B10001}, // scrollbar top
 	{B11111, B11111, B10001, B10001, B10001, B10001, B10001, B10001}, // scroll state 1
@@ -124,7 +83,6 @@ const uint8_t scroll_bar[][8] = {
 	{B10001, B10001, B10001, B10001, B11111, B11111, B10001, B10001}, // scroll state 3
 	{B10001, B10001, B10001, B10001, B10001, B10001, B11111, B11111}  // scrollbar bottom
 }; 
-#endif
 
 void lcdml_menu_display();
 void lcdml_menu_clear();
@@ -419,24 +377,16 @@ void before() {						//Initialization before the MySensors library starts up
 	ADMUX  =  bit (REFS0) | bit (REFS1) | (ADC_PIN_NR & 0x07);  // ARef internal and select input port
 
 	//****  LCD *****
-	#ifdef CHARACTER_DISPLAY
-		//  Wire.begin();  // I2C
-		lcd.clear();
-		lcd.begin(LCD_COLS, LCD_ROWS);
-		// set special chars for scrollbar
-		lcd.createChar(0, (uint8_t*)scroll_bar[0]);
-		lcd.createChar(1, (uint8_t*)scroll_bar[1]);
-		lcd.createChar(2, (uint8_t*)scroll_bar[2]);
-		lcd.createChar(3, (uint8_t*)scroll_bar[3]);
-		lcd.createChar(4, (uint8_t*)scroll_bar[4]);  
-		//lcd.setBacklight(HIGH);
-	#else
-		tft.begin();
-		tft.setRotation(1);
-		tft.setTextColor(COLOR_TEXT, COLOR_BG);
-		tft.setTextSize(TEXT_SIZE);
-	#endif
-
+	//  Wire.begin();  // I2C
+	lcd.clear();
+	lcd.begin(LCD_COLS, LCD_ROWS);
+	// set special chars for scrollbar
+	lcd.createChar(0, (uint8_t*)scroll_bar[0]);
+	lcd.createChar(1, (uint8_t*)scroll_bar[1]);
+	lcd.createChar(2, (uint8_t*)scroll_bar[2]);
+	lcd.createChar(3, (uint8_t*)scroll_bar[3]);
+	lcd.createChar(4, (uint8_t*)scroll_bar[4]);  
+	//lcd.setBacklight(HIGH);
 
 	//****  RELOAD SETTINGS FROM EEPROM *****
 	LoadStatesFromEEPROM();
@@ -940,31 +890,17 @@ bool SettledSleepCurrent_uA_reached(float Threshold_current_uA_per_sec, unsigned
 /*****************************************************************/
 
 void print_LCD_line(const char *string, int row, int col) {
-#ifdef CHARACTER_DISPLAY
 	lcd.setCursor(col,row);
 	lcd.print(string);
-#else
-	tft.setCursor(TEXT_WIDTH(col), TEXT_HEIGHT(row)); 
-	tft.print(string);
-#endif
 }
 
 void print_LCD_line(const __FlashStringHelper *string, int row, int col) {
-#ifdef CHARACTER_DISPLAY
 	lcd.setCursor(col,row);
 	lcd.print(string);
-#else
-	tft.setCursor(TEXT_WIDTH(col), TEXT_HEIGHT(row)); 
-	tft.print(string);
-#endif
 }
 
 void LCD_clear() {
-#ifdef CHARACTER_DISPLAY
 	lcd.clear();
-#else
-	tft.fillScreen(COLOR_BG);
-#endif
 }
 
 /*****************************************************************/
