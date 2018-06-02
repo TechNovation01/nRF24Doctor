@@ -286,12 +286,12 @@ void lcdml_menu_control(void)
 		int8_t delta = enc - encPrev;
 		if (delta <= -encStep)
 		{
-			LCDML.BT_down();
+			LCDML.BT_up();
 			encPrev -= encStep;
 		}
 		else if (delta >= encStep)
 		{
-			LCDML.BT_up();
+			LCDML.BT_down();
 			encPrev += encStep;
 		}
 		else
