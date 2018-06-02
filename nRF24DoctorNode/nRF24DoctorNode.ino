@@ -18,7 +18,9 @@ Change log:
 //**** CONNECTIONS *****
 #define ENCODER_A_PIN       2		//Interrupt pin required for Encoder for optimal response
 #define ENCODER_B_PIN       3		//Interrupt pin required for Encoder for optimal response
-#define TRIGGER_PIN         4    	//Debugging purposes with scope
+// Define either TRIGGER_PIN or LED_PIN, as they share a pin
+//#define TRIGGER_PIN         4    	//Debugging purposes with scope
+#define LED_PIN 	        4    	//LED to indicate status.
 #define LCD_D7         		5    	
 #define LCD_D6         		6
 #define LCD_D5         		7
@@ -322,14 +324,18 @@ ISR (ADC_vect){
 	//Continuous sampling of ADC
 	iNrAdcSamplesElapsed++;	
 	if (iNrAdcSamplesElapsed >= iStartStorageAfterNrAdcSamples){	//Skip first 130us for TX settling according to datasheet
+#ifdef TRIGGER_PIN
 		digitalWrite(TRIGGER_PIN,HIGH);				//Debugging purposes with scope
+#endif
 		iAdcSum = iAdcSum + ADC;
 		if (iNrAdcSamplesElapsed < iStopStorageAfterNrAdcSamples){
 			ADCSRA |= bit (ADSC) | bit (ADIE);	  	// start new conversion and enable interrupt flag on completion
 		}
 		else{
 			bAdcDone = true;
+#ifdef TRIGGER_PIN
 			digitalWrite(TRIGGER_PIN,LOW);			//Debugging purposes with scope
+#endif
 		}
 	}
 	else{
@@ -364,11 +370,17 @@ void ISR_TransmitTriggerADC(){
 /*****************************************************************************/
 void before() {						//Initialization before the MySensors library starts up
 	pinMode(CURRENT_PIN, INPUT);	//Analog Input for Current Usage Pin
+#ifdef TRIGGER_PIN
 	pinMode(TRIGGER_PIN, OUTPUT);
+	digitalWrite(TRIGGER_PIN,LOW);
+#endif
+#ifdef LED_PIN
+	pinMode(LED_PIN, OUTPUT);
+	digitalWrite(LED_PIN,LOW);
+#endif
 	pinMode(MOSFET_2P2OHM_PIN,OUTPUT);
 	pinMode(MOSFET_100OHM_PIN,OUTPUT);
 	digitalWrite(MOSFET_2P2OHM_PIN,HIGH);
-	digitalWrite(TRIGGER_PIN,LOW);
 
 	//**** ADC SETUP ****
 	ADCSRA =  bit (ADEN);                      				// turn ADC on
@@ -614,10 +626,16 @@ unsigned long transmit(size_t iPayloadLength) {
 	iNrNAckMessages++;													// Add one to the Not Acknowledged Message counter and remove it again if/when it is received.
 	lTimeOfTransmit_us[iIndexInArrayTimeMessages] = micros();
 	
+#ifdef LED_PIN
+	// Light LED
+	digitalWrite(LED_PIN, HIGH);
+#endif
+
 	// Transmit message with software ack request (returned in "receive function"),
 	// the boolean returned here is a Hardware hop-to-hop Ack
 	boolean success = send(MsgCounter.setDestination(iDestinationNode).set(&MessageData,iPayloadLength), true);
 	if (!success) {
+		// Keep LED on to indicate failure
 		lTimeDelayBuffer_FirstHop_us[iIndexInArrayTimeMessages] = 0;	//It failed, so I can't use it to determine a First Hop Delay (i.e. it is "infinite" delay as it failed)
 		bArrayFailedMessages[iIndexInArrayFailedMessages] = true;	//Log it as a failed message (for rolling average)
 		iNrFailedMessages++ ;
@@ -626,6 +644,10 @@ unsigned long transmit(size_t iPayloadLength) {
 		lTimeDelayBuffer_FirstHop_us[iIndexInArrayTimeMessages] = micros() - lTimeOfTransmit_us[iIndexInArrayTimeMessages];	//Log First Hop Delay in buffer
 //		unsigned long temptime = lTimeDelayBuffer_FirstHop_us[iIndexInArrayTimeMessages];
 		bArrayFailedMessages[iIndexInArrayFailedMessages] = false;	//Log it as a not-failed = succesful message (for rolling average)
+#ifdef LED_PIN
+		// LED off to indicate success
+		digitalWrite(LED_PIN, LOW);
+#endif
 	}
 	return lTimeOfTransmit_us[iIndexInArrayTimeMessages];
 }
