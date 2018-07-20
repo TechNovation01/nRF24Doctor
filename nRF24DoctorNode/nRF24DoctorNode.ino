@@ -18,7 +18,9 @@ Change log:
 //**** CONNECTIONS *****
 #define ENCODER_A_PIN       2		//Interrupt pin required for Encoder for optimal response
 #define ENCODER_B_PIN       3		//Interrupt pin required for Encoder for optimal response
-#define TRIGGER_PIN         4    	//Debugging purposes with scope
+// Define either TRIGGER_PIN or LED_PIN, as they share a pin
+//#define TRIGGER_PIN         4    	//Debugging purposes with scope
+#define LED_PIN 	        4    	//LED to indicate status.
 #define LCD_D7         		5    	
 #define LCD_D6         		6
 #define LCD_D5         		7
@@ -58,55 +60,15 @@ Change log:
 //**** MySensors - Radio *****
 #define MY_RADIO_NRF24                  	// Enable and select radio type attached
 
-#define CHARACTER_DISPLAY
-
 #include <SPI.h>
 #include <MySensors.h>
 
 //**** LCD *****
-#ifdef CHARACTER_DISPLAY
-	//#include <LiquidCrystal_I2C.h>                // LCD display with I2C interface
-	#include <LiquidCrystal.h>                      // LCD display with parallel interface
+#include <LiquidCrystal.h>                      // LCD display with parallel interface
 
-	#define LCD_COLS 16
-	#define LCD_ROWS 2
-	//LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);  	// Set the LCD I2C address
-	//LiquidCrystal_I2C lcd(0x27, 16, 2);  								// Set the LCD I2C address
-	LiquidCrystal lcd(LCD_RS,LCD_ENABLE, LCD_D4, LCD_D5, LCD_D6, LCD_D7); // LCD with parallel interface
-#else
-	#include <Adafruit_GFX.h>
-	#include <TFT_ILI9163C.h>
-
-	// Color definitions. BLACK & WHITE are defined in library.
-	#define BLUE            (0x001F)
-	#define RED             (0xF800)
-	#define GREEN           (0x07E0)
-	#define CYAN            (0x07FF)
-	#define MAGENTA         (0xF81F)
-	#define YELLOW          (0xFFE0)
-
-	#define COLOR_BG        (BLACK)
-	#define COLOR_TEXT      (WHITE)
-	#define COLOR_UNIT      (CYAN)
-	#define COLOR_SETACT    (RED)
-
-	#define TFT_WIDTH       (128)
-	#define TFT_HEIGHT      (128)
-
-	#define TEXT_SIZE       (1)
-	#define CHAR_HEIGHT     (8)
-	#define CHAR_WIDTH      (8)
-
-	#define LCD_COLS        ((TFT_WIDTH)/(CHAR_WIDTH))
-	#define LCD_ROWS        (2)	// for now
-
-	#define TEXT_HEIGHT(c)  ((c)*CHAR_HEIGHT)
-	#define TEXT_WIDTH(c)   ((c)*CHAR_WIDTH)
-
-	#define TFT_PIN_CS      (8)
-	#define TFT_PIN_DC      (7)
-	static TFT_ILI9163C tft(TFT_PIN_CS, TFT_PIN_DC);
-#endif
+#define LCD_COLS 16
+#define LCD_ROWS 2
+LiquidCrystal lcd(LCD_RS,LCD_ENABLE, LCD_D4, LCD_D5, LCD_D6, LCD_D7); // LCD with parallel interface
 
 
 //**** LCD Menu *****
@@ -116,7 +78,6 @@ Change log:
 #define _LCDML_DISP_rows             LCD_ROWS
 #define _LCDML_DISP_cfg_scrollbar    1      // enable a scrollbar
 
-#ifdef CHARACTER_DISPLAY
 const uint8_t scroll_bar[][8] = {
 	{B10001, B10001, B10001, B10001, B10001, B10001, B10001, B10001}, // scrollbar top
 	{B11111, B11111, B10001, B10001, B10001, B10001, B10001, B10001}, // scroll state 1
@@ -124,7 +85,6 @@ const uint8_t scroll_bar[][8] = {
 	{B10001, B10001, B10001, B10001, B11111, B11111, B10001, B10001}, // scroll state 3
 	{B10001, B10001, B10001, B10001, B10001, B10001, B11111, B11111}  // scrollbar bottom
 }; 
-#endif
 
 void lcdml_menu_display();
 void lcdml_menu_clear();
@@ -265,7 +225,6 @@ uint16_t iMaxDelayDestination_ms = 0;
 //**** Current Measurement ****
 #include <PinChangeInterrupt.h>					// for Pin Change Interrupt      Download: https://github.com/NicoHood/PinChangeInterrupt
 const uint8_t iNrCurrentMeasurements 	= 60;	//Nr of measurements for averaging current. <64 to prevent risk of overflow of iAdcSum
-
 const float r1_ohm    = 2.2;
 const float r2_ohm    = 100.0;
 const float r3_ohm    = 10000.0;
@@ -365,14 +324,18 @@ ISR (ADC_vect){
 	//Continuous sampling of ADC
 	iNrAdcSamplesElapsed++;	
 	if (iNrAdcSamplesElapsed >= iStartStorageAfterNrAdcSamples){	//Skip first 130us for TX settling according to datasheet
+#ifdef TRIGGER_PIN
 		digitalWrite(TRIGGER_PIN,HIGH);				//Debugging purposes with scope
+#endif
 		iAdcSum = iAdcSum + ADC;
 		if (iNrAdcSamplesElapsed < iStopStorageAfterNrAdcSamples){
 			ADCSRA |= bit (ADSC) | bit (ADIE);	  	// start new conversion and enable interrupt flag on completion
 		}
 		else{
 			bAdcDone = true;
+#ifdef TRIGGER_PIN
 			digitalWrite(TRIGGER_PIN,LOW);			//Debugging purposes with scope
+#endif
 		}
 	}
 	else{
@@ -407,11 +370,17 @@ void ISR_TransmitTriggerADC(){
 /*****************************************************************************/
 void before() {						//Initialization before the MySensors library starts up
 	pinMode(CURRENT_PIN, INPUT);	//Analog Input for Current Usage Pin
+#ifdef TRIGGER_PIN
 	pinMode(TRIGGER_PIN, OUTPUT);
+	digitalWrite(TRIGGER_PIN,LOW);
+#endif
+#ifdef LED_PIN
+	pinMode(LED_PIN, OUTPUT);
+	digitalWrite(LED_PIN,LOW);
+#endif
 	pinMode(MOSFET_2P2OHM_PIN,OUTPUT);
 	pinMode(MOSFET_100OHM_PIN,OUTPUT);
 	digitalWrite(MOSFET_2P2OHM_PIN,HIGH);
-	digitalWrite(TRIGGER_PIN,LOW);
 
 	//**** ADC SETUP ****
 	ADCSRA =  bit (ADEN);                      				// turn ADC on
@@ -419,24 +388,16 @@ void before() {						//Initialization before the MySensors library starts up
 	ADMUX  =  bit (REFS0) | bit (REFS1) | (ADC_PIN_NR & 0x07);  // ARef internal and select input port
 
 	//****  LCD *****
-	#ifdef CHARACTER_DISPLAY
-		//  Wire.begin();  // I2C
-		lcd.clear();
-		lcd.begin(LCD_COLS, LCD_ROWS);
-		// set special chars for scrollbar
-		lcd.createChar(0, (uint8_t*)scroll_bar[0]);
-		lcd.createChar(1, (uint8_t*)scroll_bar[1]);
-		lcd.createChar(2, (uint8_t*)scroll_bar[2]);
-		lcd.createChar(3, (uint8_t*)scroll_bar[3]);
-		lcd.createChar(4, (uint8_t*)scroll_bar[4]);  
-		//lcd.setBacklight(HIGH);
-	#else
-		tft.begin();
-		tft.setRotation(1);
-		tft.setTextColor(COLOR_TEXT, COLOR_BG);
-		tft.setTextSize(TEXT_SIZE);
-	#endif
-
+	//  Wire.begin();  // I2C
+	lcd.clear();
+	lcd.begin(LCD_COLS, LCD_ROWS);
+	// set special chars for scrollbar
+	lcd.createChar(0, (uint8_t*)scroll_bar[0]);
+	lcd.createChar(1, (uint8_t*)scroll_bar[1]);
+	lcd.createChar(2, (uint8_t*)scroll_bar[2]);
+	lcd.createChar(3, (uint8_t*)scroll_bar[3]);
+	lcd.createChar(4, (uint8_t*)scroll_bar[4]);  
+	//lcd.setBacklight(HIGH);
 
 	//****  RELOAD SETTINGS FROM EEPROM *****
 	LoadStatesFromEEPROM();
@@ -665,10 +626,16 @@ unsigned long transmit(size_t iPayloadLength) {
 	iNrNAckMessages++;													// Add one to the Not Acknowledged Message counter and remove it again if/when it is received.
 	lTimeOfTransmit_us[iIndexInArrayTimeMessages] = micros();
 	
+#ifdef LED_PIN
+	// Light LED
+	digitalWrite(LED_PIN, HIGH);
+#endif
+
 	// Transmit message with software ack request (returned in "receive function"),
 	// the boolean returned here is a Hardware hop-to-hop Ack
 	boolean success = send(MsgCounter.setDestination(iDestinationNode).set(&MessageData,iPayloadLength), true);
 	if (!success) {
+		// Keep LED on to indicate failure
 		lTimeDelayBuffer_FirstHop_us[iIndexInArrayTimeMessages] = 0;	//It failed, so I can't use it to determine a First Hop Delay (i.e. it is "infinite" delay as it failed)
 		bArrayFailedMessages[iIndexInArrayFailedMessages] = true;	//Log it as a failed message (for rolling average)
 		iNrFailedMessages++ ;
@@ -677,6 +644,10 @@ unsigned long transmit(size_t iPayloadLength) {
 		lTimeDelayBuffer_FirstHop_us[iIndexInArrayTimeMessages] = micros() - lTimeOfTransmit_us[iIndexInArrayTimeMessages];	//Log First Hop Delay in buffer
 //		unsigned long temptime = lTimeDelayBuffer_FirstHop_us[iIndexInArrayTimeMessages];
 		bArrayFailedMessages[iIndexInArrayFailedMessages] = false;	//Log it as a not-failed = succesful message (for rolling average)
+#ifdef LED_PIN
+		// LED off to indicate success
+		digitalWrite(LED_PIN, LOW);
+#endif
 	}
 	return lTimeOfTransmit_us[iIndexInArrayTimeMessages];
 }
@@ -940,31 +911,17 @@ bool SettledSleepCurrent_uA_reached(float Threshold_current_uA_per_sec, unsigned
 /*****************************************************************/
 
 void print_LCD_line(const char *string, int row, int col) {
-#ifdef CHARACTER_DISPLAY
 	lcd.setCursor(col,row);
 	lcd.print(string);
-#else
-	tft.setCursor(TEXT_WIDTH(col), TEXT_HEIGHT(row)); 
-	tft.print(string);
-#endif
 }
 
 void print_LCD_line(const __FlashStringHelper *string, int row, int col) {
-#ifdef CHARACTER_DISPLAY
 	lcd.setCursor(col,row);
 	lcd.print(string);
-#else
-	tft.setCursor(TEXT_WIDTH(col), TEXT_HEIGHT(row)); 
-	tft.print(string);
-#endif
 }
 
 void LCD_clear() {
-#ifdef CHARACTER_DISPLAY
 	lcd.clear();
-#else
-	tft.fillScreen(COLOR_BG);
-#endif
 }
 
 /*****************************************************************/
