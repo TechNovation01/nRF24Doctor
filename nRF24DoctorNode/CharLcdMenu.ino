@@ -31,7 +31,7 @@ void lcdml_menu_display()
 			do
 			{
 				// check if a menu element has a condetion and if the condetion be true
-				if (tmp->checkCondetion()) 
+				if (tmp->checkCondition()) 
 				{
 					// check the type of a menu element
 					if (tmp->checkType_menu() == true)

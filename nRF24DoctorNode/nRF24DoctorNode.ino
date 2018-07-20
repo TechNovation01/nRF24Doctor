@@ -72,7 +72,7 @@ LiquidCrystal lcd(LCD_RS,LCD_ENABLE, LCD_D4, LCD_D5, LCD_D6, LCD_D7); // LCD wit
 
 
 //**** LCD Menu *****
-#include <LCDMenuLib2.h>	// Download: https://github.com/Jomelo/LCDMenuLib2
+#include <LCDMenuLib2.h>	// Download 1.2.7: https://github.com/Jomelo/LCDMenuLib2
 
 #define _LCDML_DISP_cols             LCD_COLS
 #define _LCDML_DISP_rows             LCD_ROWS
