@@ -259,7 +259,7 @@ const char *pcGatewayRetryNames[iNrGatwayRetryOptions] = { "SKIP GATEWAY", "RETR
 
 const uint16_t restartDelayMs = 3000u;
 
-indication_t criticalError = INDICATION_ERR_END;	// INDICATION_ERR_END indicates no error
+bool transportHwError = false;
 
 #define COUNT_OF(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
 #define CONSTRAIN_HI(amt,high) ((amt)>(high)?(high):(amt))
@@ -705,10 +705,20 @@ void indication( const indication_t ind )
 {
 	switch(ind)
 	{
-		// Catch & store critical errors
+#ifdef LED_PIN
+		// If transport is not ready, flash the LED to indicate something is happening
+		case INDICATION_TX:
+			if (not isTransportReady())
+			{
+				// Blink LED
+				digitalWrite(LED_PIN, HIGH);
+				delay_with_update(20);
+				digitalWrite(LED_PIN, LOW);
+			}
+			break;
+#endif
 		case INDICATION_ERR_INIT_TRANSPORT:			// MySensors transport hardware (radio) init failure.
-		case INDICATION_ERR_CHECK_UPLINK:			// Failed to check uplink (no connection to gateway)
-			criticalError = ind;
+			transportHwError = true;
 			break;
 		default:
 			break;
@@ -1000,22 +1010,14 @@ void menuPage(uint8_t param)
 		LCD_clear();
 		char buf[LCD_COLS+1];
 
-		if (criticalError != INDICATION_ERR_END)
+		if (transportHwError)
 		{
-			// Some critical error is active which prevents showing the screen.
-			switch (criticalError)
-			{
-				case INDICATION_ERR_INIT_TRANSPORT:			// Radio init error
-					print_LCD_line("Radio init error",  0, 0);
-					print_LCD_line("Replace radio",     1, 0);
-					break;
-				case INDICATION_ERR_CHECK_UPLINK:
-					print_LCD_line("Search Gateway..",  0, 0);
-					break;
-				default:
-					break;
-				// Other errors are non-critical or won't occur, so display the active screen
-			}
+			print_LCD_line("Radio init error",  0, 0);
+			print_LCD_line("Replace radio",     1, 0);
+		}
+		else if (not isTransportReady())
+		{
+			print_LCD_line("Search Gateway..",  0, 0);
 		}
 		else
 		{
