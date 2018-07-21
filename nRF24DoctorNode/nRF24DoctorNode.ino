@@ -730,8 +730,8 @@ void indication( const indication_t ind )
 /********************************************************************************/
 void loadNewRadioSettings() {
 	ClearStorageAndCounters();
-	uint8_t iTempVar0 = RF24_BASE_ID_VAR[0];
-	uint8_t rfsetup = ( ((iRf24DataRate & 0b10 ) << 4) | ((iRf24DataRate & 0b01 ) << 3) | (iRf24PaLevel << 1) ) + 1;		//!< RF24_RF_SETUP, +1 for Si24R1 and LNA
+	const uint8_t iTempVar0 = RF24_BASE_ID_VAR[0];
+	const uint8_t rfsetup = ( ((iRf24DataRate & 0b10 ) << 4) | ((iRf24DataRate & 0b01 ) << 3) | (iRf24PaLevel << 1) ) + 1;		//!< RF24_RF_SETUP, +1 for Si24R1 and LNA
 
 	RF24_setChannel(iRf24Channel);
 	RF24_setRFSetup(rfsetup);
@@ -745,6 +745,11 @@ void loadNewRadioSettings() {
 	
 	RF24_BASE_ID_VAR[0] = iTempVar0;
 	
+	// Log radio settings
+	Sprint("Channel:"); Sprint(iRf24Channel);
+	Sprint("\tPaLevel:"); Sprint(pcPaLevelNames[iRf24PaLevelGw]);
+	Sprint("\tDataRate:"); Sprintln(pcDataRateNames[iRf24DataRate]);
+
 	// Splash screen
 	LCD_clear();
 	print_LCD_line("nRF24 DOCTOR " SKETCH_VERSION_STRING,  0, 0);
@@ -761,6 +766,8 @@ void loadNewRadioSettings() {
 /*****************************************************************/
 void loadDefaults()
 {
+	Sprintln(F("Load defaults"));
+
 	iRf24Channel		= DEFAULT_RF24_CHANNEL;
 	iRf24PaLevel		= DEFAULT_RF24_PA_LEVEL_NODE;
 	iRf24PaLevelGw		= DEFAULT_RF24_PA_LEVEL_GW;
@@ -804,6 +811,8 @@ void LoadStatesFromEEPROM()
 
 void SaveStatesToEepromAndReset()
 {
+	Sprintln(F("Save eeprom"));
+
 	saveState(EEPROM_CHANNEL, iRf24Channel);
 	saveState(EEPROM_PA_LEVEL, iRf24PaLevel);
 	saveState(EEPROM_PA_LEVEL_GW, iRf24PaLevelGw);
