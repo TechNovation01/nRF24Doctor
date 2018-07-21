@@ -926,13 +926,11 @@ bool SettledSleepCurrent_uA_reached(float Threshold_current_uA_per_sec, unsigned
 	float Current_uA_prev = uAperBit3*GetAvgADCBits(iNrCurrentMeasurements);
 	float Current_uA_per_sec = 0;
 	unsigned long lTstart = millis();
-	unsigned long lT_last_meas = lTstart;
 	int n=0;
 	unsigned long lTimeScaler = constrain(100/Threshold_current_uA_per_sec,100,15000);//don't measure to often as it will load the sleep current too much.
 	while ((n<2) & ((millis()-lTstart)<lTimeOut)){
 		delay_with_update(lTimeScaler);
 		Current_uA_new 		= uAperBit3*GetAvgADCBits(iNrCurrentMeasurements);
-		lT_last_meas 		= millis();
 		Current_uA_per_sec 	= (Current_uA_new - Current_uA_prev)/(float(lTimeScaler)/1000);
 		Current_uA_prev = Current_uA_new;
 		if (Current_uA_per_sec < Threshold_current_uA_per_sec){n++;}
