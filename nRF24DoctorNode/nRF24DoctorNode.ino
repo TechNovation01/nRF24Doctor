@@ -15,6 +15,9 @@ Change log:
 	2018/04/17	Added support for TFT_ILI9163C display
 */
 
+#define SKETCH_NAME_STRING    "nRF24_Doctor_N250"
+#define SKETCH_VERSION_STRING "1.1"
+
 //**** CONNECTIONS *****
 #define ENCODER_A_PIN       2		//Interrupt pin required for Encoder for optimal response
 #define ENCODER_B_PIN       3		//Interrupt pin required for Encoder for optimal response
@@ -415,7 +418,7 @@ void setup() {
 }
 
 void presentation() {
-	sendSketchInfo(F("nRF24_Doctor_N250"), F("1.1"));
+	sendSketchInfo(F(SKETCH_NAME_STRING), F(SKETCH_VERSION_STRING));
 	present(CHILD_ID_COUNTER, S_CUSTOM) ;  // "CUSTOM" counter
 }
 
@@ -732,12 +735,15 @@ void loadNewRadioSettings() {
 	
 	RF24_BASE_ID_VAR[0] = iTempVar0;
 	
+	// Splash screen
 	LCD_clear();
-	print_LCD_line("nRF24 DOCTOR",  0, 0);
+	print_LCD_line("nRF24 DOCTOR " SKETCH_VERSION_STRING,  0, 0);
 	print_LCD_line("Connecting...", 1, 0);
 	Sprintln(F("Connecting..."));
-	transportWaitUntilReady(10000);		// Give it 10[s] to connect, else continue to allow user to set new connection settings
-	Sprintln(F("Done"));
+	// Show splash screen for a short while, trying to connect to GW.
+	// If GW connection has not been established after this delay the
+	// node continues trying to connect.
+	transportWaitUntilReady(2000);
 }
 
 /*****************************************************************/
