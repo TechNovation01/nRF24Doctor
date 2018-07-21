@@ -56,6 +56,7 @@ Change log:
 #define MY_PARENT_NODE_ID 0              	// Typically 0 for Gateway
 
 #define MY_BAUD_RATE 115200
+#define MY_INDICATION_HANDLER
 
 //**** MySensors - Radio *****
 #define MY_RADIO_NRF24                  	// Enable and select radio type attached
@@ -254,6 +255,8 @@ const uint8_t iNrGatwayRetryOptions = 3;
 const char *pcGatewayRetryNames[iNrGatwayRetryOptions] = { "SKIP GATEWAY", "RETRY GATEWAY" , "CANCEL ALL"};
 
 const uint16_t restartDelayMs = 3000u;
+
+indication_t criticalError = INDICATION_ERR_END;	// INDICATION_ERR_END indicates no error
 
 #define COUNT_OF(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
 #define CONSTRAIN_HI(amt,high) ((amt)>(high)?(high):(amt))
@@ -693,6 +696,23 @@ void MY_RF24_startListening()
 // }
 
 /********************************************************************************/
+/************************* MYSENSORS INDICATION CALLBACK ************************/
+/********************************************************************************/
+void indication( const indication_t ind )
+{
+	switch(ind)
+	{
+		// Catch & store critical errors
+		case INDICATION_ERR_INIT_TRANSPORT:			// MySensors transport hardware (radio) init failure.
+		case INDICATION_ERR_CHECK_UPLINK:			// Failed to check uplink (no connection to gateway)
+			criticalError = ind;
+			break;
+		default:
+			break;
+	}
+}
+
+/********************************************************************************/
 /************************ CONFIGURE nRF24 RADIO FUNCTIONS ***********************/
 /********************************************************************************/
 void loadNewRadioSettings() {
@@ -974,59 +994,79 @@ void menuPage(uint8_t param)
 		LCD_clear();
 		char buf[LCD_COLS+1];
 
-		switch(page(param))
+		if (criticalError != INDICATION_ERR_END)
 		{
-		case PAGE_STATISTICS:
-			snprintf_P(buf, sizeof(buf), PSTR("P%-3dFAIL%4d%3d%%"), MY_PARENT_NODE_ID, iNrFailedMessages, GetNrOfTrueValuesInArray(bArrayFailedMessages, iMaxNumberOfMessages));
-			print_LCD_line(buf, 0, 0);
-			snprintf_P(buf, sizeof(buf), PSTR("D%-3dNACK%4d%3d%%"), iDestinationNode , iNrNAckMessages, GetNrOfTrueValuesInArray(bArrayNAckMessages, iMaxNumberOfMessages));
-			print_LCD_line(buf, 1, 0);
-			break;
-
-		case PAGE_TIMING:
-			if (iMaxDelayFirstHop_ms>9999){
-				snprintf_P(buf, sizeof(buf), PSTR("HOP1 dTmax   INF"));
-			} else {
-				snprintf_P(buf, sizeof(buf), PSTR("HOP1 dTmax%4dms"),iMaxDelayFirstHop_ms);
+			// Some critical error is active which prevents showing the screen.
+			switch (criticalError)
+			{
+				case INDICATION_ERR_INIT_TRANSPORT:			// Radio init error
+					print_LCD_line("Radio init error",  0, 0);
+					print_LCD_line("Replace radio",     1, 0);
+					break;
+				case INDICATION_ERR_CHECK_UPLINK:
+					print_LCD_line("Search Gateway..",  0, 0);
+					break;
+				default:
+					break;
+				// Other errors are non-critical or won't occur, so display the active screen
 			}
-			print_LCD_line(buf, 0, 0);
-			if (iMaxDelayDestination_ms>9999){
-				snprintf_P(buf, sizeof(buf), PSTR("D%-3d dTmax   INF"),iDestinationNode,iMaxDelayDestination_ms);
-			} else {
-				snprintf_P(buf, sizeof(buf), PSTR("D%-3d dTmax%4dms"),iDestinationNode,iMaxDelayDestination_ms);
+		}
+		else
+		{
+			switch(page(param))
+			{
+				case PAGE_STATISTICS:
+					snprintf_P(buf, sizeof(buf), PSTR("P%-3dFAIL%4d%3d%%"), MY_PARENT_NODE_ID, iNrFailedMessages, GetNrOfTrueValuesInArray(bArrayFailedMessages, iMaxNumberOfMessages));
+					print_LCD_line(buf, 0, 0);
+					snprintf_P(buf, sizeof(buf), PSTR("D%-3dNACK%4d%3d%%"), iDestinationNode , iNrNAckMessages, GetNrOfTrueValuesInArray(bArrayNAckMessages, iMaxNumberOfMessages));
+					print_LCD_line(buf, 1, 0);
+					break;
+
+				case PAGE_TIMING:
+					if (iMaxDelayFirstHop_ms>9999){
+						snprintf_P(buf, sizeof(buf), PSTR("HOP1 dTmax   INF"));
+					} else {
+						snprintf_P(buf, sizeof(buf), PSTR("HOP1 dTmax%4dms"),iMaxDelayFirstHop_ms);
+					}
+					print_LCD_line(buf, 0, 0);
+					if (iMaxDelayDestination_ms>9999){
+						snprintf_P(buf, sizeof(buf), PSTR("D%-3d dTmax   INF"),iDestinationNode,iMaxDelayDestination_ms);
+					} else {
+						snprintf_P(buf, sizeof(buf), PSTR("D%-3d dTmax%4dms"),iDestinationNode,iMaxDelayDestination_ms);
+					}
+					print_LCD_line(buf, 1, 0);
+					break;
+
+				case PAGE_MSGRATE:
+					snprintf_P(buf, sizeof(buf), PSTR("MSG/SEC     %3d"), iGetMsgRate);
+					print_LCD_line(buf, 0, 0);
+					snprintf_P(buf, sizeof(buf), PSTR("ARC Avg%2d Max%2d"), iArcCntAvg,iArcCntMax);
+					print_LCD_line(buf, 1, 0);
+					break;
+
+				case PAGE_COUNTERS:
+					snprintf_P(buf, sizeof(buf), PSTR("MESSAGE COUNT:  "));
+					print_LCD_line(buf, 0, 0);
+					snprintf_P(buf, sizeof(buf), PSTR("           %5d"),iMessageCounter);
+					print_LCD_line(buf, 1, 0);
+					break;
+
+				case PAGE_TXRXPOWER:
+					printBufCurrent(buf,sizeof(buf), TransmitCurrent_uA, "TX");
+					print_LCD_line(buf, 0, 0);
+					printBufCurrent(buf,sizeof(buf), ReceiveCurrent_uA, "RX");
+					print_LCD_line(buf, 1, 0);
+					break;
+
+				case PAGE_SLEEPPOWER:
+					currState = STATE_SLEEP;
+					printBufCurrent(buf,sizeof(buf), SleepCurrent_uA, "SLEEP");
+					print_LCD_line(buf, 0, 0);
+					break;
+
+				default:
+					break;
 			}
-			print_LCD_line(buf, 1, 0);
-			break;
-
-		case PAGE_MSGRATE:
-			snprintf_P(buf, sizeof(buf), PSTR("MSG/SEC     %3d"), iGetMsgRate);
-			print_LCD_line(buf, 0, 0);
-			snprintf_P(buf, sizeof(buf), PSTR("ARC Avg%2d Max%2d"), iArcCntAvg,iArcCntMax);
-			print_LCD_line(buf, 1, 0);
-			break;
-
-		case PAGE_COUNTERS:
-			snprintf_P(buf, sizeof(buf), PSTR("MESSAGE COUNT:  "));
-			print_LCD_line(buf, 0, 0);
-			snprintf_P(buf, sizeof(buf), PSTR("           %5d"),iMessageCounter);
-			print_LCD_line(buf, 1, 0);
-			break;
-
-		case PAGE_TXRXPOWER:
-			printBufCurrent(buf,sizeof(buf), TransmitCurrent_uA, "TX");
-			print_LCD_line(buf, 0, 0);
-			printBufCurrent(buf,sizeof(buf), ReceiveCurrent_uA, "RX");
-			print_LCD_line(buf, 1, 0);
-			break;
-
-		case PAGE_SLEEPPOWER:
-			currState = STATE_SLEEP;
-			printBufCurrent(buf,sizeof(buf), SleepCurrent_uA, "SLEEP");
-			print_LCD_line(buf, 0, 0);
-			break;
-
-		default:
-			break;
 		}
 
 		if (LCDML.BT_checkAny()) // check if any button is pressed (enter, up, down, left, right)
