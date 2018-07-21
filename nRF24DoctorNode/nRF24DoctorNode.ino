@@ -456,7 +456,7 @@ void statemachine()
 				// Start of gateway update
 				currState = STATE_START_GW_UPDATE;
 			}
-			else
+			else if (isTransportReady())
 			{
 				// Start of next measurement round
 				if ((micros() - lTprevTransmit) >= iSetMsgDelay){currState = STATE_TX;}	//Message Rate limiter
