@@ -15,6 +15,9 @@ Change log:
 	2018/04/17	Added support for TFT_ILI9163C display
 */
 
+#define SKETCH_NAME_STRING    "nRF24_Doctor_N250"
+#define SKETCH_VERSION_STRING "1.1"
+
 //**** CONNECTIONS *****
 #define ENCODER_A_PIN       2		//Interrupt pin required for Encoder for optimal response
 #define ENCODER_B_PIN       3		//Interrupt pin required for Encoder for optimal response
@@ -56,6 +59,7 @@ Change log:
 #define MY_PARENT_NODE_ID 0              	// Typically 0 for Gateway
 
 #define MY_BAUD_RATE 115200
+#define MY_INDICATION_HANDLER
 
 //**** MySensors - Radio *****
 #define MY_RADIO_NRF24                  	// Enable and select radio type attached
@@ -255,6 +259,8 @@ const char *pcGatewayRetryNames[iNrGatwayRetryOptions] = { "SKIP GATEWAY", "RETR
 
 const uint16_t restartDelayMs = 3000u;
 
+bool transportHwError = false;
+
 #define COUNT_OF(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
 #define CONSTRAIN_HI(amt,high) ((amt)>(high)?(high):(amt))
 
@@ -412,7 +418,7 @@ void setup() {
 }
 
 void presentation() {
-	sendSketchInfo(F("nRF24_Doctor_N250"), F("1.1"));
+	sendSketchInfo(F(SKETCH_NAME_STRING), F(SKETCH_VERSION_STRING));
 	present(CHILD_ID_COUNTER, S_CUSTOM) ;  // "CUSTOM" counter
 }
 
@@ -450,7 +456,7 @@ void statemachine()
 				// Start of gateway update
 				currState = STATE_START_GW_UPDATE;
 			}
-			else
+			else if (isTransportReady())
 			{
 				// Start of next measurement round
 				if ((micros() - lTprevTransmit) >= iSetMsgDelay){currState = STATE_TX;}	//Message Rate limiter
@@ -693,12 +699,39 @@ void MY_RF24_startListening()
 // }
 
 /********************************************************************************/
+/************************* MYSENSORS INDICATION CALLBACK ************************/
+/********************************************************************************/
+void indication( const indication_t ind )
+{
+	switch(ind)
+	{
+#ifdef LED_PIN
+		// If transport is not ready, flash the LED to indicate something is happening
+		case INDICATION_TX:
+			if (not isTransportReady())
+			{
+				// Blink LED
+				digitalWrite(LED_PIN, HIGH);
+				delay_with_update(20);
+				digitalWrite(LED_PIN, LOW);
+			}
+			break;
+#endif
+		case INDICATION_ERR_INIT_TRANSPORT:			// MySensors transport hardware (radio) init failure.
+			transportHwError = true;
+			break;
+		default:
+			break;
+	}
+}
+
+/********************************************************************************/
 /************************ CONFIGURE nRF24 RADIO FUNCTIONS ***********************/
 /********************************************************************************/
 void loadNewRadioSettings() {
 	ClearStorageAndCounters();
-	uint8_t iTempVar0 = RF24_BASE_ID_VAR[0];
-	uint8_t rfsetup = ( ((iRf24DataRate & 0b10 ) << 4) | ((iRf24DataRate & 0b01 ) << 3) | (iRf24PaLevel << 1) ) + 1;		//!< RF24_RF_SETUP, +1 for Si24R1 and LNA
+	const uint8_t iTempVar0 = RF24_BASE_ID_VAR[0];
+	const uint8_t rfsetup = ( ((iRf24DataRate & 0b10 ) << 4) | ((iRf24DataRate & 0b01 ) << 3) | (iRf24PaLevel << 1) ) + 1;		//!< RF24_RF_SETUP, +1 for Si24R1 and LNA
 
 	RF24_setChannel(iRf24Channel);
 	RF24_setRFSetup(rfsetup);
@@ -712,12 +745,20 @@ void loadNewRadioSettings() {
 	
 	RF24_BASE_ID_VAR[0] = iTempVar0;
 	
+	// Log radio settings
+	Sprint("Channel:"); Sprint(iRf24Channel);
+	Sprint("\tPaLevel:"); Sprint(pcPaLevelNames[iRf24PaLevelGw]);
+	Sprint("\tDataRate:"); Sprintln(pcDataRateNames[iRf24DataRate]);
+
+	// Splash screen
 	LCD_clear();
-	print_LCD_line("nRF24 DOCTOR",  0, 0);
+	print_LCD_line("nRF24 DOCTOR " SKETCH_VERSION_STRING,  0, 0);
 	print_LCD_line("Connecting...", 1, 0);
 	Sprintln(F("Connecting..."));
-	transportWaitUntilReady(10000);		// Give it 10[s] to connect, else continue to allow user to set new connection settings
-	Sprintln(F("Done"));
+	// Show splash screen for a short while, trying to connect to GW.
+	// If GW connection has not been established after this delay the
+	// node continues trying to connect.
+	transportWaitUntilReady(2000);
 }
 
 /*****************************************************************/
@@ -725,6 +766,8 @@ void loadNewRadioSettings() {
 /*****************************************************************/
 void loadDefaults()
 {
+	Sprintln(F("Load defaults"));
+
 	iRf24Channel		= DEFAULT_RF24_CHANNEL;
 	iRf24PaLevel		= DEFAULT_RF24_PA_LEVEL_NODE;
 	iRf24PaLevelGw		= DEFAULT_RF24_PA_LEVEL_GW;
@@ -768,6 +811,8 @@ void LoadStatesFromEEPROM()
 
 void SaveStatesToEepromAndReset()
 {
+	Sprintln(F("Save eeprom"));
+
 	saveState(EEPROM_CHANNEL, iRf24Channel);
 	saveState(EEPROM_PA_LEVEL, iRf24PaLevel);
 	saveState(EEPROM_PA_LEVEL_GW, iRf24PaLevelGw);
@@ -890,13 +935,11 @@ bool SettledSleepCurrent_uA_reached(float Threshold_current_uA_per_sec, unsigned
 	float Current_uA_prev = uAperBit3*GetAvgADCBits(iNrCurrentMeasurements);
 	float Current_uA_per_sec = 0;
 	unsigned long lTstart = millis();
-	unsigned long lT_last_meas = lTstart;
 	int n=0;
 	unsigned long lTimeScaler = constrain(100/Threshold_current_uA_per_sec,100,15000);//don't measure to often as it will load the sleep current too much.
 	while ((n<2) & ((millis()-lTstart)<lTimeOut)){
 		delay_with_update(lTimeScaler);
 		Current_uA_new 		= uAperBit3*GetAvgADCBits(iNrCurrentMeasurements);
-		lT_last_meas 		= millis();
 		Current_uA_per_sec 	= (Current_uA_new - Current_uA_prev)/(float(lTimeScaler)/1000);
 		Current_uA_prev = Current_uA_new;
 		if (Current_uA_per_sec < Threshold_current_uA_per_sec){n++;}
@@ -974,59 +1017,71 @@ void menuPage(uint8_t param)
 		LCD_clear();
 		char buf[LCD_COLS+1];
 
-		switch(page(param))
+		if (transportHwError)
 		{
-		case PAGE_STATISTICS:
-			snprintf_P(buf, sizeof(buf), PSTR("P%-3dFAIL%4d%3d%%"), MY_PARENT_NODE_ID, iNrFailedMessages, GetNrOfTrueValuesInArray(bArrayFailedMessages, iMaxNumberOfMessages));
-			print_LCD_line(buf, 0, 0);
-			snprintf_P(buf, sizeof(buf), PSTR("D%-3dNACK%4d%3d%%"), iDestinationNode , iNrNAckMessages, GetNrOfTrueValuesInArray(bArrayNAckMessages, iMaxNumberOfMessages));
-			print_LCD_line(buf, 1, 0);
-			break;
+			print_LCD_line("Radio init error",  0, 0);
+			print_LCD_line("Replace radio",     1, 0);
+		}
+		else if (not isTransportReady())
+		{
+			print_LCD_line("Search Gateway..",  0, 0);
+		}
+		else
+		{
+			switch(page(param))
+			{
+				case PAGE_STATISTICS:
+					snprintf_P(buf, sizeof(buf), PSTR("P%-3dFAIL%4d%3d%%"), MY_PARENT_NODE_ID, iNrFailedMessages, GetNrOfTrueValuesInArray(bArrayFailedMessages, iMaxNumberOfMessages));
+					print_LCD_line(buf, 0, 0);
+					snprintf_P(buf, sizeof(buf), PSTR("D%-3dNACK%4d%3d%%"), iDestinationNode , iNrNAckMessages, GetNrOfTrueValuesInArray(bArrayNAckMessages, iMaxNumberOfMessages));
+					print_LCD_line(buf, 1, 0);
+					break;
 
-		case PAGE_TIMING:
-			if (iMaxDelayFirstHop_ms>9999){
-				snprintf_P(buf, sizeof(buf), PSTR("HOP1 dTmax   INF"));
-			} else {
-				snprintf_P(buf, sizeof(buf), PSTR("HOP1 dTmax%4dms"),iMaxDelayFirstHop_ms);
+				case PAGE_TIMING:
+					if (iMaxDelayFirstHop_ms>9999){
+						snprintf_P(buf, sizeof(buf), PSTR("HOP1 dTmax   INF"));
+					} else {
+						snprintf_P(buf, sizeof(buf), PSTR("HOP1 dTmax%4dms"),iMaxDelayFirstHop_ms);
+					}
+					print_LCD_line(buf, 0, 0);
+					if (iMaxDelayDestination_ms>9999){
+						snprintf_P(buf, sizeof(buf), PSTR("D%-3d dTmax   INF"),iDestinationNode,iMaxDelayDestination_ms);
+					} else {
+						snprintf_P(buf, sizeof(buf), PSTR("D%-3d dTmax%4dms"),iDestinationNode,iMaxDelayDestination_ms);
+					}
+					print_LCD_line(buf, 1, 0);
+					break;
+
+				case PAGE_MSGRATE:
+					snprintf_P(buf, sizeof(buf), PSTR("MSG/SEC     %3d"), iGetMsgRate);
+					print_LCD_line(buf, 0, 0);
+					snprintf_P(buf, sizeof(buf), PSTR("ARC Avg%2d Max%2d"), iArcCntAvg,iArcCntMax);
+					print_LCD_line(buf, 1, 0);
+					break;
+
+				case PAGE_COUNTERS:
+					snprintf_P(buf, sizeof(buf), PSTR("MESSAGE COUNT:  "));
+					print_LCD_line(buf, 0, 0);
+					snprintf_P(buf, sizeof(buf), PSTR("           %5d"),iMessageCounter);
+					print_LCD_line(buf, 1, 0);
+					break;
+
+				case PAGE_TXRXPOWER:
+					printBufCurrent(buf,sizeof(buf), TransmitCurrent_uA, "TX");
+					print_LCD_line(buf, 0, 0);
+					printBufCurrent(buf,sizeof(buf), ReceiveCurrent_uA, "RX");
+					print_LCD_line(buf, 1, 0);
+					break;
+
+				case PAGE_SLEEPPOWER:
+					currState = STATE_SLEEP;
+					printBufCurrent(buf,sizeof(buf), SleepCurrent_uA, "SLEEP");
+					print_LCD_line(buf, 0, 0);
+					break;
+
+				default:
+					break;
 			}
-			print_LCD_line(buf, 0, 0);
-			if (iMaxDelayDestination_ms>9999){
-				snprintf_P(buf, sizeof(buf), PSTR("D%-3d dTmax   INF"),iDestinationNode,iMaxDelayDestination_ms);
-			} else {
-				snprintf_P(buf, sizeof(buf), PSTR("D%-3d dTmax%4dms"),iDestinationNode,iMaxDelayDestination_ms);
-			}
-			print_LCD_line(buf, 1, 0);
-			break;
-
-		case PAGE_MSGRATE:
-			snprintf_P(buf, sizeof(buf), PSTR("MSG/SEC     %3d"), iGetMsgRate);
-			print_LCD_line(buf, 0, 0);
-			snprintf_P(buf, sizeof(buf), PSTR("ARC Avg%2d Max%2d"), iArcCntAvg,iArcCntMax);
-			print_LCD_line(buf, 1, 0);
-			break;
-
-		case PAGE_COUNTERS:
-			snprintf_P(buf, sizeof(buf), PSTR("MESSAGE COUNT:  "));
-			print_LCD_line(buf, 0, 0);
-			snprintf_P(buf, sizeof(buf), PSTR("           %5d"),iMessageCounter);
-			print_LCD_line(buf, 1, 0);
-			break;
-
-		case PAGE_TXRXPOWER:
-			printBufCurrent(buf,sizeof(buf), TransmitCurrent_uA, "TX");
-			print_LCD_line(buf, 0, 0);
-			printBufCurrent(buf,sizeof(buf), ReceiveCurrent_uA, "RX");
-			print_LCD_line(buf, 1, 0);
-			break;
-
-		case PAGE_SLEEPPOWER:
-			currState = STATE_SLEEP;
-			printBufCurrent(buf,sizeof(buf), SleepCurrent_uA, "SLEEP");
-			print_LCD_line(buf, 0, 0);
-			break;
-
-		default:
-			break;
 		}
 
 		if (LCDML.BT_checkAny()) // check if any button is pressed (enter, up, down, left, right)
