@@ -18,6 +18,10 @@ Change log:
 #define SKETCH_NAME_STRING    "nRF24_Doctor_N250"
 #define SKETCH_VERSION_STRING "1.1"
 
+//**** DEBUG *****
+#define LOCAL_DEBUG
+//#define MY_DEBUG_VERBOSE_RF24
+
 //**** CONNECTIONS *****
 #define ENCODER_A_PIN       2		//Interrupt pin required for Encoder for optimal response
 #define ENCODER_B_PIN       3		//Interrupt pin required for Encoder for optimal response
@@ -38,25 +42,23 @@ Change log:
 #define ADC_PIN_NR           5     	// A5, Match to CURRENT_PIN for configuring registers ADC
 
 
-//**** DEBUG *****
-#define LOCAL_DEBUG
-
-#ifdef LOCAL_DEBUG
-#define Sprint(a) (Serial.print(a))           	// macro as substitute for print, enable if no print wanted
-#define Sprintln(a) (Serial.println(a))
-#else											// macro for "no" debug print
-#define Sprint(a)
-#define Sprintln(a)
-#endif
-
 //**** MySensors *****
+// Tell MySensors where to find the radio parameters
+extern uint8_t iRf24Channel;
+extern uint8_t iRf24DataRate;
+extern uint8_t iRf24PaLevel;
+#define MY_RF24_CHANNEL			(iRf24Channel)
+#define MY_RF24_DATARATE		(iRf24DataRate)
+#define MY_RF24_PA_LEVEL		(iRf24PaLevel)
+
 //#define MY_DEBUG							// Enable debug prints to serial monitor
 //#define MY_DEBUG_VERBOSE_RF24				// debug nrf24
+//#define MY_RF24_CHANNEL				(90)
 #define MY_SPLASH_SCREEN_DISABLED			// Disable splash screen (saves some flash)
-#define MY_TRANSPORT_WAIT_READY_MS 10 		// [ms] Init timeout for gateway not reachable
-#define MY_NODE_ID 250						// Set a high node ID, which typically will not yet be used in the network
+#define MY_TRANSPORT_WAIT_READY_MS	(10)	// [ms] Init timeout for gateway not reachable
+#define MY_NODE_ID					(250)	// Set a high node ID, which typically will not yet be used in the network
 #define MY_PARENT_NODE_IS_STATIC			// Fixed parent Node ID, else MySensors Transport will attempt automatic fix after successive failures...but we don't want that while diagnosing our connection
-#define MY_PARENT_NODE_ID 0              	// Typically 0 for Gateway
+#define MY_PARENT_NODE_ID			(0)		// Typically 0 for Gateway
 
 #define MY_BAUD_RATE 115200
 #define MY_INDICATION_HANDLER
@@ -66,6 +68,7 @@ Change log:
 
 #include <SPI.h>
 #include <MySensors.h>
+#include "shared/nRF24DoctorShared.h"
 
 //**** LCD *****
 #include <LiquidCrystal.h>                      // LCD display with parallel interface
@@ -143,18 +146,6 @@ LCDML_createMenu(_LCDML_DISP_cnt);
 static Encoder encoder(ENCODER_A_PIN, ENCODER_B_PIN);
 static Bounce button = Bounce(); 
 
-//**** EEPROM STORAGE LOCATIONS *****
-#define EEPROM_FLAG_MAGIC		0xA5	// Indication contents are valid. Empty eeprom will contain 0xFF
-#define EEPROM_FLAG				0
-#define EEPROM_CHANNEL			1
-#define EEPROM_PA_LEVEL			2
-#define EEPROM_PA_LEVEL_GW		3
-#define EEPROM_DATARATE			4
-#define EEPROM_BASE_RADIO_ID	5
-#define EEPROM_DESTINATION_NODE	6
-#define EEPROM_PAYLOAD_SIZE		7
-#define EEPROM_MESSAGE_RATE		8
-
 //**** MySensors Messages ****
 #define CHILD_ID_COUNTER 0
 #define CHILD_ID_UPDATE_GATEWAY 0
@@ -169,7 +160,6 @@ union t_MessageData {
 };
 #pragma pack(pop)									//back to the previous packing mode
 //Message Rate 
-uint8_t iSetMsgRate = 10;
 uint8_t iGetMsgRate = 0;
 
 const int iNrArcCnt = 15;
@@ -185,35 +175,12 @@ uint16_t iNrFailedMessages = 0;            							// total of Failed Messages
 uint16_t iNrNAckMessages = 0;              							// total of Not Acknowledged Messages
 uint16_t iMessageCounter = 0;
 
-//nRF24 Settings
-const char *pcPaLevelNames[]  = { "MIN", "LOW", "HIGH", "MAX" };
-const char *pcDataRateNames[] = { "1MBPS", "2MBPS" , "250KBPS"};
-
-//Define your available RF24_BASE_ID 
-uint8_t RF24_BASE_ID_VAR[MY_RF24_ADDR_WIDTH] = { 0x00,0xFC,0xE1,0xA8,0xA8 };		//Used to Store the active BASE_ID
 const uint8_t RF24_BASE_ID_VARS[][MY_RF24_ADDR_WIDTH] = {
-	{ 0x00,0xFC,0xE1,0xA8,0xA8 }
+	  { 0x00,0xFC,0xE1,0xA8,0xA8 }
 	, { 0x00,0xA1,0xF3,0x09,0xB6 }
 	, { 0x00,0xAA,0xA5,0xC4,0xD9 }
 	, { 0x00,0xB1,0x47,0xEE,0x82 }
 };
-
-// Radio values
-uint8_t iRf24Channel;
-uint8_t iRf24PaLevel;		//PA Level for the Node
-uint8_t iRf24PaLevelGw;		//PA Level for the Gateway
-uint8_t iRf24DataRate;
-uint8_t iRf24BaseRadioId;
-uint8_t iDestinationNode;
-uint8_t iPayloadSize;
-#define DEFAULT_RF24_CHANNEL		(MY_RF24_CHANNEL)
-#define DEFAULT_RF24_PA_LEVEL_NODE	(MY_RF24_PA_LEVEL)
-#define DEFAULT_RF24_PA_LEVEL_GW	(MY_RF24_PA_LEVEL)
-#define DEFAULT_RF24_DATARATE		(MY_RF24_DATARATE)
-#define DEFAULT_RF24_BASE_ID_IDX	(0)
-#define DEFAULT_DESTINATION_NODE	(0)				// Default 0 = gateway, Settable in Menu
-#define DEFAULT_PAYLOAD_SIZE		(2)				// 2 Bytes is the minimum for the Counter data
-#define DEFAULT_MESSAGE_RATE 		(10)
 
 //**** Timing ****
 const uint8_t iNrTimeDelays = 10;
@@ -260,9 +227,6 @@ const char *pcGatewayRetryNames[iNrGatwayRetryOptions] = { "SKIP GATEWAY", "RETR
 const uint16_t restartDelayMs = 3000u;
 
 bool transportHwError = false;
-
-#define COUNT_OF(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
-#define CONSTRAIN_HI(amt,high) ((amt)>(high)?(high):(amt))
 
 /*****************************************************************************/
 /******************************* ENCODER & BUTTON ****************************/
@@ -405,12 +369,25 @@ void before() {						//Initialization before the MySensors library starts up
 	lcd.createChar(4, (uint8_t*)scroll_bar[4]);  
 	//lcd.setBacklight(HIGH);
 
-	//****  RELOAD SETTINGS FROM EEPROM *****
-	LoadStatesFromEEPROM();
+	// Load radio settings from eeprom
+	loadEeprom();
+	logRadioSettings();
 }
 
 void setup() {
-	loadNewRadioSettings();	//Load the Radio Settings as they are stored in EEPROM
+	ClearStorageAndCounters();
+//	activateRadioSettings();
+//	logRadioSettings();
+	Sprintln(F("Connecting..."));
+
+	// Splash screen
+	LCD_clear();
+	print_LCD_line("nRF24 DOCTOR " SKETCH_VERSION_STRING,  0, 0);
+	print_LCD_line("Connecting...", 1, 0);
+	// Show splash screen for a short while, trying to connect to GW.
+	// If GW connection has not been established after this delay the
+	// node continues trying to connect.
+	transportWaitUntilReady(2000);
 
 	//**** MENU *****
 	LCDML_setup(_LCDML_DISP_cnt);
@@ -558,16 +535,14 @@ void statemachine()
 				MyMessage MsgUpdateGateway(CHILD_ID_UPDATE_GATEWAY, V_CUSTOM);
 				MsgUpdateGateway.setDestination(0);
 				MsgUpdateGateway.setSensor(250);
-				// Send value for Gateway settings: xxxyz (xxx = Channel, y = PaLevel, z = DataRate)
-				const uint16_t iMessageToGateway = iRf24Channel*100 + iRf24PaLevelGw*10 + iRf24DataRate;
-				MsgUpdateGateway.set(iMessageToGateway);
+				serializeGwSettings( MsgUpdateGateway );
 
 				// Transmit message with software ack request (returned in "receive function")
 				if ( send(MsgUpdateGateway, true) )
 				{
 					// Got a reply from gateway that message was received correctly.
 					// Gateway will change to new settings, so the node can also activate the settings.
-					SaveStatesToEepromAndReset();
+					saveEepromAndReset();
 					// Never return here...
 				}
 			}
@@ -723,109 +698,6 @@ void indication( const indication_t ind )
 		default:
 			break;
 	}
-}
-
-/********************************************************************************/
-/************************ CONFIGURE nRF24 RADIO FUNCTIONS ***********************/
-/********************************************************************************/
-void loadNewRadioSettings() {
-	ClearStorageAndCounters();
-	const uint8_t iTempVar0 = RF24_BASE_ID_VAR[0];
-	const uint8_t rfsetup = ( ((iRf24DataRate & 0b10 ) << 4) | ((iRf24DataRate & 0b01 ) << 3) | (iRf24PaLevel << 1) ) + 1;		//!< RF24_RF_SETUP, +1 for Si24R1 and LNA
-
-	RF24_setChannel(iRf24Channel);
-	RF24_setRFSetup(rfsetup);
-	RF24_enableFeatures();
-	
-	RF24_BASE_ID_VAR[0] = RF24_BROADCAST_ADDRESS;
-	RF24_setPipeAddress(RF24_REG_RX_ADDR_P0 + RF24_BROADCAST_PIPE, (uint8_t*)&RF24_BASE_ID_VAR,
-						RF24_BROADCAST_PIPE > 1 ? 1 : MY_RF24_ADDR_WIDTH);
-	RF24_setPipeAddress(RF24_REG_RX_ADDR_P0, (uint8_t*)&RF24_BASE_ID_VAR, MY_RF24_ADDR_WIDTH);
-	RF24_setPipeAddress(RF24_REG_TX_ADDR, (uint8_t*)&RF24_BASE_ID_VAR, MY_RF24_ADDR_WIDTH);
-	
-	RF24_BASE_ID_VAR[0] = iTempVar0;
-	
-	// Log radio settings
-	Sprint("Channel:"); Sprint(iRf24Channel);
-	Sprint("\tPaLevel:"); Sprint(pcPaLevelNames[iRf24PaLevelGw]);
-	Sprint("\tDataRate:"); Sprintln(pcDataRateNames[iRf24DataRate]);
-
-	// Splash screen
-	LCD_clear();
-	print_LCD_line("nRF24 DOCTOR " SKETCH_VERSION_STRING,  0, 0);
-	print_LCD_line("Connecting...", 1, 0);
-	Sprintln(F("Connecting..."));
-	// Show splash screen for a short while, trying to connect to GW.
-	// If GW connection has not been established after this delay the
-	// node continues trying to connect.
-	transportWaitUntilReady(2000);
-}
-
-/*****************************************************************/
-/************************ EEPROM FUNCTIONS ***********************/
-/*****************************************************************/
-void loadDefaults()
-{
-	Sprintln(F("Load defaults"));
-
-	iRf24Channel		= DEFAULT_RF24_CHANNEL;
-	iRf24PaLevel		= DEFAULT_RF24_PA_LEVEL_NODE;
-	iRf24PaLevelGw		= DEFAULT_RF24_PA_LEVEL_GW;
-	iRf24DataRate		= DEFAULT_RF24_DATARATE;
-	iRf24BaseRadioId	= DEFAULT_RF24_BASE_ID_IDX;
-	iDestinationNode	= DEFAULT_DESTINATION_NODE;
-	iPayloadSize		= DEFAULT_PAYLOAD_SIZE;
-	iSetMsgRate			= DEFAULT_MESSAGE_RATE;
-	if (iRf24BaseRadioId < COUNT_OF(RF24_BASE_ID_VARS))
-	{
-		memcpy(RF24_BASE_ID_VAR, RF24_BASE_ID_VARS[iRf24BaseRadioId], sizeof(RF24_BASE_ID_VAR));
-	}
-}
-
-void LoadStatesFromEEPROM()
-{
-	if (loadState(EEPROM_FLAG) == EEPROM_FLAG_MAGIC)
-	{
-		// Eeprom contents are valid
-		iRf24Channel 		= loadState(EEPROM_CHANNEL);
-		iRf24PaLevel 		= loadState(EEPROM_PA_LEVEL);
-		iRf24PaLevelGw 		= loadState(EEPROM_PA_LEVEL_GW);
-		iRf24DataRate 		= loadState(EEPROM_DATARATE);
-		iRf24BaseRadioId	= loadState(EEPROM_BASE_RADIO_ID);
-		iDestinationNode	= loadState(EEPROM_DESTINATION_NODE);
-		iPayloadSize		= loadState(EEPROM_PAYLOAD_SIZE);
-		iSetMsgRate			= loadState(EEPROM_MESSAGE_RATE);	 
-		if (iRf24BaseRadioId < COUNT_OF(RF24_BASE_ID_VARS))
-		{
-			memcpy(RF24_BASE_ID_VAR, RF24_BASE_ID_VARS[iRf24BaseRadioId], sizeof(RF24_BASE_ID_VAR));
-		}
-	}
-	else
-	{
-		// Load defaults & save default to eeprom
-		loadDefaults();
-		SaveStatesToEepromAndReset();
-		// Never return here...
-	}
-}
-
-void SaveStatesToEepromAndReset()
-{
-	Sprintln(F("Save eeprom"));
-
-	saveState(EEPROM_CHANNEL, iRf24Channel);
-	saveState(EEPROM_PA_LEVEL, iRf24PaLevel);
-	saveState(EEPROM_PA_LEVEL_GW, iRf24PaLevelGw);
-	saveState(EEPROM_DATARATE, iRf24DataRate);
-	saveState(EEPROM_BASE_RADIO_ID, iRf24BaseRadioId);
-	saveState(EEPROM_DESTINATION_NODE, iDestinationNode);
-	saveState(EEPROM_PAYLOAD_SIZE, iPayloadSize);
-	saveState(EEPROM_MESSAGE_RATE, iSetMsgRate);
-	// Mark eeprom contents valid
-	saveState(EEPROM_FLAG, EEPROM_FLAG_MAGIC);
-
-	// Do a Soft Reset - This allows for the radio to correctly reload with the new settings from EEPROM					
-	asm volatile ("  jmp 0");
 }
 
 /*****************************************************************/
@@ -1239,13 +1111,14 @@ void menuCfgRadioId(uint8_t line)
 { 
 	if (line == LCDML.MENU_getCursorPos()) 
 	{
+static uint8_t iRf24BaseRadioId = 0;		// TEMP, until supported again, or removed
 		menuCfgEntry( iRf24BaseRadioId );
 		iRf24BaseRadioId = CONSTRAIN_HI( iRf24BaseRadioId, COUNT_OF(RF24_BASE_ID_VARS)-1 );
-		memcpy(RF24_BASE_ID_VAR, RF24_BASE_ID_VARS[iRf24BaseRadioId], sizeof(RF24_BASE_ID_VAR));
+		setBaseId( RF24_BASE_ID_VARS[iRf24BaseRadioId] );
 	} 
 
 	char buf[LCD_COLS+1];
-	snprintf_P(buf, sizeof(buf), PSTR("%02X:%0.2X:%0.2X:%0.2X:%0.2X"), RF24_BASE_ID_VAR[0],RF24_BASE_ID_VAR[1],RF24_BASE_ID_VAR[2],RF24_BASE_ID_VAR[3],RF24_BASE_ID_VAR[4]);
+	getBaseIdStr(buf, sizeof(buf));
 
 	// use the line from function parameters
 	lcd.setCursor(1, line);
@@ -1260,7 +1133,7 @@ void menuSaveNodeEeprom(__attribute__((unused)) uint8_t param)
 		print_LCD_line(F("Eeprom saved"), 0, 0);
 		print_LCD_line(F("Restarting..."), 1, 0);
 		delay(restartDelayMs);
-		SaveStatesToEepromAndReset();
+		saveEepromAndReset();
 		// Never return here...
 	} 
 }
@@ -1273,7 +1146,8 @@ void menuDefaultNodeEeprom(__attribute__((unused)) uint8_t param)
 		print_LCD_line(F("Defaults saved"), 0, 0);
 		print_LCD_line(F("Restarting..."), 1, 0);
 		delay(restartDelayMs);
-		SaveStatesToEepromAndReset();
+		loadDefaults();
+		saveEepromAndReset();
 		// Never return here...
 	} 
 }
@@ -1312,7 +1186,8 @@ void menuLoadNodeEeprom(__attribute__((unused)) uint8_t param)
 {
 	if (LCDML.FUNC_setup())
 	{
-		LoadStatesFromEEPROM();
+		// TODO: This reads settings from eeprom but does not activate them -- confusing to the user!
+		loadEeprom();
 		LCD_clear();
 		print_LCD_line(F("Eeprom loaded"), 0, 0);
 	} 
