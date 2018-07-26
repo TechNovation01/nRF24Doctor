@@ -20,6 +20,7 @@ Change log:
 
 //**** DEBUG *****
 #define LOCAL_DEBUG
+//#define MY_DEBUG							// Enable debug prints to serial monitor
 //#define MY_DEBUG_VERBOSE_RF24
 
 //**** CONNECTIONS *****
@@ -43,17 +44,8 @@ Change log:
 
 
 //**** MySensors *****
-// Tell MySensors where to find the radio parameters
-extern uint8_t iRf24Channel;
-extern uint8_t iRf24DataRate;
-extern uint8_t iRf24PaLevel;
-#define MY_RF24_CHANNEL			(iRf24Channel)
-#define MY_RF24_DATARATE		(iRf24DataRate)
-#define MY_RF24_PA_LEVEL		(iRf24PaLevel)
+#include "shared/RadioConfig.h"
 
-//#define MY_DEBUG							// Enable debug prints to serial monitor
-//#define MY_DEBUG_VERBOSE_RF24				// debug nrf24
-//#define MY_RF24_CHANNEL				(90)
 #define MY_SPLASH_SCREEN_DISABLED			// Disable splash screen (saves some flash)
 #define MY_TRANSPORT_WAIT_READY_MS	(10)	// [ms] Init timeout for gateway not reachable
 #define MY_NODE_ID					(250)	// Set a high node ID, which typically will not yet be used in the network
@@ -62,9 +54,6 @@ extern uint8_t iRf24PaLevel;
 
 #define MY_BAUD_RATE 115200
 #define MY_INDICATION_HANDLER
-
-//**** MySensors - Radio *****
-#define MY_RADIO_NRF24                  	// Enable and select radio type attached
 
 #include <SPI.h>
 #include <MySensors.h>
@@ -119,16 +108,15 @@ LCDML_addAdvanced (10 , LCDML_0_7       , 4    , NULL              , ""         
 LCDML_addAdvanced (11 , LCDML_0_7       , 5    , NULL              , ""                , menuCfgGwPa      , 0                , _LCDML_TYPE_dynParam);
 LCDML_addAdvanced (12 , LCDML_0_7       , 6    , NULL              , ""                , menuCfgNodePa    , 0                , _LCDML_TYPE_dynParam);
 LCDML_addAdvanced (13 , LCDML_0_7       , 7    , NULL              , ""                , menuCfgRate      , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (14 , LCDML_0_7       , 8    , NULL              , ""                , menuCfgRadioId   , 0                , _LCDML_TYPE_dynParam);
-LCDML_add         (15 , LCDML_0_7       , 9                        , "Reset buff   x"  , menuResetBuf);
-LCDML_add         (16 , LCDML_0_7       , 10                       , "Eeprom       >"  , NULL);
-LCDML_add         (17 , LCDML_0_7_10    , 1                        , "Save node    x"  , menuSaveNodeEeprom);
-LCDML_add         (18 , LCDML_0_7_10    , 2                        , "Save node&gw x"  , menuSaveNodeAndGwEeprom);
-LCDML_add         (19 , LCDML_0_7_10    , 3                        , "Load node    x"  , menuLoadNodeEeprom);
-LCDML_add         (20 , LCDML_0_7_10    , 4                        , "Defaults     x"  , menuDefaultNodeEeprom);
-LCDML_add         (21 , LCDML_0_7_10    , 5                        , "Back         <"  , menuBack);
-LCDML_add         (22 , LCDML_0_7       , 11                       , "Back         <"  , menuBack);
-#define _LCDML_DISP_cnt    22   // Should equal last id in menu
+LCDML_add         (14 , LCDML_0_7       , 8                        , "Reset buff   x"  , menuResetBuf);
+LCDML_add         (15 , LCDML_0_7       , 9                        , "Eeprom       >"  , NULL);
+LCDML_add         (16 , LCDML_0_7_9     , 1                        , "Save node    x"  , menuSaveNodeEeprom);
+LCDML_add         (17 , LCDML_0_7_9     , 2                        , "Save node&gw x"  , menuSaveNodeAndGwEeprom);
+LCDML_add         (18 , LCDML_0_7_9     , 3                        , "Load node    x"  , menuLoadNodeEeprom);
+LCDML_add         (19 , LCDML_0_7_9     , 4                        , "Defaults     x"  , menuDefaultNodeEeprom);
+LCDML_add         (20 , LCDML_0_7_9     , 5                        , "Back         <"  , menuBack);
+LCDML_add         (21 , LCDML_0_7       , 11                       , "Back         <"  , menuBack);
+#define _LCDML_DISP_cnt    21   // Should equal last id in menu
 
 
 
@@ -174,13 +162,6 @@ boolean bArrayNAckMessages[iMaxNumberOfMessages] = { 0 };			// Array for moving 
 uint16_t iNrFailedMessages = 0;            							// total of Failed Messages
 uint16_t iNrNAckMessages = 0;              							// total of Not Acknowledged Messages
 uint16_t iMessageCounter = 0;
-
-const uint8_t RF24_BASE_ID_VARS[][MY_RF24_ADDR_WIDTH] = {
-	  { 0x00,0xFC,0xE1,0xA8,0xA8 }
-	, { 0x00,0xA1,0xF3,0x09,0xB6 }
-	, { 0x00,0xAA,0xA5,0xC4,0xD9 }
-	, { 0x00,0xB1,0x47,0xEE,0x82 }
-};
 
 //**** Timing ****
 const uint8_t iNrTimeDelays = 10;
@@ -1105,24 +1086,6 @@ void menuCfgRate(uint8_t line)
 	// use the line from function parameters
 	lcd.setCursor(1, line);
 	lcd.print(buf);
-}
-
-void menuCfgRadioId(uint8_t line)
-{ 
-	if (line == LCDML.MENU_getCursorPos()) 
-	{
-static uint8_t iRf24BaseRadioId = 0;		// TEMP, until supported again, or removed
-		menuCfgEntry( iRf24BaseRadioId );
-		iRf24BaseRadioId = CONSTRAIN_HI( iRf24BaseRadioId, COUNT_OF(RF24_BASE_ID_VARS)-1 );
-		setBaseId( RF24_BASE_ID_VARS[iRf24BaseRadioId] );
-	} 
-
-	char buf[LCD_COLS+1];
-	getBaseIdStr(buf, sizeof(buf));
-
-	// use the line from function parameters
-	lcd.setCursor(1, line);
-	lcd.print(buf); 
 }
 
 void menuSaveNodeEeprom(__attribute__((unused)) uint8_t param)

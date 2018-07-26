@@ -46,22 +46,8 @@
 #define BUTTON_RESTORE_DEFAULTS_PIN 			4    	// physical pin , use internal pullup
 #define BUTTON_RESTORE_DEFAULTS_PRESS_TIME_MS 	(1000) 	// time the button to restore defaults has to be pressed to become active
 
-// Tell MySensors where to find the radio parameters
-extern uint8_t iRf24Channel;
-extern uint8_t iRf24DataRate;
-extern uint8_t iRf24PaLevel;
-#define MY_RF24_CHANNEL			(iRf24Channel)
-#define MY_RF24_DATARATE		(iRf24DataRate)
-#define MY_RF24_PA_LEVEL		(iRf24PaLevel)
+#include "shared/RadioConfig.h"
 
-//extern uint8_t Rf24BaseId[];
-//#define MY_RF24_BASE_RADIO_ID	Rf24BaseId[0],Rf24BaseId[1],Rf24BaseId[2],Rf24BaseId[3],Rf24BaseId[4]
-
-// Enable and select radio type attached
-#define MY_RADIO_NRF24
-//#define MY_RADIO_NRF5_ESB
-//#define MY_RADIO_RFM69
-//#define MY_RADIO_RFM95
 #define MY_RF24_IRQ_PIN               (2)
 #define MY_RX_MESSAGE_BUFFER_FEATURE
 #define MY_RX_MESSAGE_BUFFER_SIZE     (15)    // Default size of 20 is rather large and leads to memory warnings
