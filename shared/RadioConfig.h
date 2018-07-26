@@ -7,6 +7,11 @@
 #define DEFAULT_RF24_PA_LEVEL_GW	(RF24_PA_LOW)
 #define DEFAULT_RF24_DATARATE		(RF24_250KBPS)
 
+// Radio values
+uint8_t iRf24Channel;
+uint8_t iRf24PaLevel;		// PA Level for the radio
+uint8_t iRf24DataRate;
+
 // Tell MySensors where to find the radio parameters
 extern uint8_t iRf24Channel;
 extern uint8_t iRf24DataRate;

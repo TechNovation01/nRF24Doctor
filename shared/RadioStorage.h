@@ -17,10 +17,6 @@
 #define EEPROM_PAYLOAD_SIZE		6
 #define EEPROM_MESSAGE_RATE		7
 
-// Radio values
-uint8_t iRf24Channel;
-uint8_t iRf24PaLevel;		// PA Level for the radio
-uint8_t iRf24DataRate;
 #ifndef MY_GATEWAY_FEATURE
 // Node-only parameters
 uint8_t iRf24PaLevelGw;		//PA Level for the Gateway
