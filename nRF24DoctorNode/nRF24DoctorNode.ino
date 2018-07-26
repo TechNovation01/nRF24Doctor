@@ -57,7 +57,7 @@ Change log:
 
 #include <SPI.h>
 #include <MySensors.h>
-#include "shared/nRF24DoctorShared.h"
+#include "shared/RadioStorage.h"
 
 //**** LCD *****
 #include <LiquidCrystal.h>                      // LCD display with parallel interface
