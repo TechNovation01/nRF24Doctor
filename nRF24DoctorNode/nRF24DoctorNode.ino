@@ -881,7 +881,7 @@ void menuPage(uint8_t param)
 {
 	if (LCDML.FUNC_setup())
 	{
-		LCDML.FUNC_setLoopInterval(100);  // starts a trigger event for the loop function every 100 millisecounds
+		LCDML.FUNC_setLoopInterval(200);  // starts a trigger event for the loop function every 200 millisecounds
 	}
 
 	if (LCDML.FUNC_loop())
