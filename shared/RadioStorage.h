@@ -2,25 +2,6 @@
 
 #include <stdint.h>
 
-#define COUNT_OF(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
-#define CONSTRAIN_HI(amt,high) ((amt)>(high)?(high):(amt))
-
-
-#ifdef LOCAL_DEBUG
-#define Sprint(a)   (Serial.print(a))			// macro as substitute for print, enable if no print wanted
-#define Sprintln(a) (Serial.println(a))
-#define Sflush() 	(Serial.flush())
-#else											// macro for "no" debug print
-#define Sprint(a)
-#define Sprintln(a)
-#define Sflush()
-#endif
-
-
-//nRF24 Settings
-const char *pcPaLevelNames[]  = { "MIN", "LOW", "HIGH", "MAX" };
-const char *pcDataRateNames[] = { "1MBPS", "2MBPS" , "250KBPS"};
-
 #define DEFAULT_DESTINATION_NODE	(0)				// Default 0 = gateway, Settable in Menu
 #define DEFAULT_PAYLOAD_SIZE		(2)				// 2 Bytes is the minimum for the Counter data
 #define DEFAULT_MESSAGE_RATE 		(10)
@@ -54,11 +35,11 @@ void reset();
 void logRadioSettings()
 {
 	Sprint(F("Channel:"));		Sprint(iRf24Channel);
-	Sprint(F("\tPaLevel:"));	Sprint(pcPaLevelNames[iRf24PaLevel]);
+	Sprint(F("\tPaLevel:"));	Sprint(rf24PaLevelToString(iRf24PaLevel));
 #ifndef MY_GATEWAY_FEATURE
-	Sprint(F("\tPaLevelGw:"));	Sprint(pcPaLevelNames[iRf24PaLevelGw]);
+	Sprint(F("\tPaLevelGw:"));	Sprint(rf24PaLevelToString(iRf24PaLevelGw));
 #endif
-	Sprint(F("\tDataRate:"));	Sprint(pcDataRateNames[iRf24DataRate]);
+	Sprint(F("\tDataRate:"));	Sprint(rf24DataRateToString(iRf24DataRate));
 #ifndef MY_GATEWAY_FEATURE
 	Sprint(F("\tDest:"));		Sprint(iDestinationNode);
 	Sprint(F("\tPayload:"));	Sprint(iPayloadSize);

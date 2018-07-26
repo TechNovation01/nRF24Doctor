@@ -93,6 +93,7 @@
 #define DELAY_BETWEEN_RADIO_SETTINGS_PRINT_MS (20000)           // Print Radio Settings to Serial Monitor every x[ms]
 #define MY_TRANSPORT_SANITY_CHECK_INTERVAL_MS (3000000000)      // To Prevent the MySensors library from resetting back to default radio settings
 #include <MySensors.h>
+#include "shared/Generic.h"
 #include "shared/RadioStorage.h"
 #include <Bounce2.h>	// button debounce  Download: https://github.com/thomasfredericks/Bounce2
 

@@ -57,6 +57,7 @@ Change log:
 
 #include <SPI.h>
 #include <MySensors.h>
+#include "shared/Generic.h"
 #include "shared/RadioStorage.h"
 
 //**** LCD *****
@@ -1045,11 +1046,11 @@ void menuCfgNodePa(uint8_t line)
 	if (line == LCDML.MENU_getCursorPos()) 
 	{
 		menuCfgEntry( iRf24PaLevel );
-		iRf24PaLevel = CONSTRAIN_HI( iRf24PaLevel, COUNT_OF(pcPaLevelNames)-1 );
+		iRf24PaLevel = rf24PaLevelConstrain( iRf24PaLevel );
 	} 
 
 	char buf[LCD_COLS+1];
-	snprintf_P(buf, sizeof(buf), PSTR("NODE PA  %-4s"), pcPaLevelNames[iRf24PaLevel]);
+	snprintf_P(buf, sizeof(buf), PSTR("NODE PA  %-4s"), rf24PaLevelToString(iRf24PaLevel));
 
 	// use the line from function parameters
 	lcd.setCursor(1, line);
@@ -1061,11 +1062,11 @@ void menuCfgGwPa(uint8_t line)
 	if (line == LCDML.MENU_getCursorPos()) 
 	{
 		menuCfgEntry( iRf24PaLevelGw );
-		iRf24PaLevelGw = CONSTRAIN_HI( iRf24PaLevelGw, COUNT_OF(pcPaLevelNames)-1 );
+		iRf24PaLevelGw = rf24PaLevelConstrain( iRf24PaLevelGw );
 	} 
 
 	char buf[LCD_COLS+1];
-	snprintf_P(buf, sizeof(buf), PSTR("GW PA    %-4s"), pcPaLevelNames[iRf24PaLevelGw]);
+	snprintf_P(buf, sizeof(buf), PSTR("GW PA    %-4s"), rf24PaLevelToString(iRf24PaLevelGw));
 
 	// use the line from function parameters
 	lcd.setCursor(1, line);
@@ -1077,11 +1078,11 @@ void menuCfgRate(uint8_t line)
 	if (line == LCDML.MENU_getCursorPos()) 
 	{
 		menuCfgEntry( iRf24DataRate );
-		iRf24DataRate = CONSTRAIN_HI( iRf24DataRate, COUNT_OF(pcDataRateNames)-1 );
+		iRf24DataRate = rf24DataRateConstrain( iRf24DataRate );
 	} 
 
 	char buf[LCD_COLS+1];
-	snprintf_P(buf, sizeof(buf), PSTR("DATARATE %-4s"), pcDataRateNames[iRf24DataRate]);
+	snprintf_P(buf, sizeof(buf), PSTR("DATARATE %-4s"), rf24DataRateToString(iRf24DataRate));
 
 	// use the line from function parameters
 	lcd.setCursor(1, line);
