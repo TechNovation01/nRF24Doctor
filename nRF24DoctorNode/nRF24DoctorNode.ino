@@ -102,22 +102,26 @@ LCDML_addAdvanced (3  , LCDML_0         , 4    , NULL              , "Counters  
 LCDML_addAdvanced (4  , LCDML_0         , 5    , NULL              , "TxRx Power   >"  , menuPage         , PAGE_TXRXPOWER   , _LCDML_TYPE_default);
 LCDML_addAdvanced (5  , LCDML_0         , 6    , NULL              , "Sleep Power  >"  , menuPage         , PAGE_SLEEPPOWER  , _LCDML_TYPE_default);
 LCDML_add         (6  , LCDML_0         , 7                        , "Settings     >"  , NULL);
-LCDML_addAdvanced (7  , LCDML_0_7       , 1    , NULL              , ""  			   , menuCfgPayload   , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (8  , LCDML_0_7       , 2    , NULL              , ""  			   , menuCfgMsgRate   , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (9  , LCDML_0_7       , 3    , NULL              , ""                , menuCfgChannel   , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (10 , LCDML_0_7       , 4    , NULL              , ""                , menuCfgGwNode    , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (11 , LCDML_0_7       , 5    , NULL              , ""                , menuCfgGwPa      , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (12 , LCDML_0_7       , 6    , NULL              , ""                , menuCfgNodePa    , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (13 , LCDML_0_7       , 7    , NULL              , ""                , menuCfgRate      , 0                , _LCDML_TYPE_dynParam);
-LCDML_add         (14 , LCDML_0_7       , 8                        , "Reset buff   x"  , menuResetBuf);
-LCDML_add         (15 , LCDML_0_7       , 9                        , "Eeprom       >"  , NULL);
-LCDML_add         (16 , LCDML_0_7_9     , 1                        , "Save node    x"  , menuSaveNodeEeprom);
-LCDML_add         (17 , LCDML_0_7_9     , 2                        , "Save node&gw x"  , menuSaveNodeAndGwEeprom);
-LCDML_add         (18 , LCDML_0_7_9     , 3                        , "Load node    x"  , menuLoadNodeEeprom);
-LCDML_add         (19 , LCDML_0_7_9     , 4                        , "Defaults     x"  , menuDefaultNodeEeprom);
-LCDML_add         (20 , LCDML_0_7_9     , 5                        , "Back         <"  , menuBack);
-LCDML_add         (21 , LCDML_0_7       , 11                       , "Back         <"  , menuBack);
-#define _LCDML_DISP_cnt    21   // Should equal last id in menu
+LCDML_add         (7  , LCDML_0_7       , 1                        , "Radio        >"  , NULL);
+LCDML_addAdvanced (8  , LCDML_0_7_1     , 1    , NULL              , ""                , menuCfgChannel   , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (9  , LCDML_0_7_1     , 2    , NULL              , ""                , menuCfgGwNode    , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (10 , LCDML_0_7_1     , 3    , NULL              , ""                , menuCfgGwPa      , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (11 , LCDML_0_7_1     , 4    , NULL              , ""                , menuCfgNodePa    , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (12 , LCDML_0_7_1     , 5    , NULL              , ""                , menuCfgRate      , 0                , _LCDML_TYPE_dynParam);
+LCDML_add         (13 , LCDML_0_7_1     , 6                        , "Back         <"  , menuBack);
+LCDML_add         (14 , LCDML_0_7       , 2                        , "Doctor       >"  , NULL);
+LCDML_addAdvanced (15 , LCDML_0_7_2     , 1    , NULL              , ""  			   , menuCfgPayload   , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (16 , LCDML_0_7_2     , 2    , NULL              , ""  			   , menuCfgMsgRate   , 0                , _LCDML_TYPE_dynParam);
+LCDML_add         (17 , LCDML_0_7_2     , 3                        , "Reset buff   x"  , menuResetBuf);
+LCDML_add         (18 , LCDML_0_7_2     , 4                        , "Back         <"  , menuBack);
+LCDML_add         (19 , LCDML_0_7       , 3                        , "Eeprom       >"  , NULL);
+LCDML_add         (20 , LCDML_0_7_3     , 1                        , "Save node    x"  , menuSaveNodeEeprom);
+LCDML_add         (21 , LCDML_0_7_3     , 2                        , "Save node&gw x"  , menuSaveNodeAndGwEeprom);
+LCDML_add         (22 , LCDML_0_7_3     , 3                        , "Defaults nodex"  , menuDefaultNodeEeprom);
+LCDML_add         (23 , LCDML_0_7_3     , 4                        , "Back         <"  , menuBack);
+LCDML_add         (24 , LCDML_0_7       , 4                        , "Reset node   x"  , menuResetNode);
+LCDML_add         (25 , LCDML_0_7       , 5                        , "Back         <"  , menuBack);
+#define _LCDML_DISP_cnt    25   // Should equal last id in menu
 
 
 
@@ -1050,7 +1054,7 @@ void menuCfgNodePa(uint8_t line)
 	} 
 
 	char buf[LCD_COLS+1];
-	snprintf_P(buf, sizeof(buf), PSTR("NODE PA  %-4s"), rf24PaLevelToString(iRf24PaLevel));
+	snprintf_P(buf, sizeof(buf), PSTR("Node PA  %-4s"), rf24PaLevelToString(iRf24PaLevel));
 
 	// use the line from function parameters
 	lcd.setCursor(1, line);
@@ -1082,7 +1086,7 @@ void menuCfgRate(uint8_t line)
 	} 
 
 	char buf[LCD_COLS+1];
-	snprintf_P(buf, sizeof(buf), PSTR("DATARATE %-4s"), rf24DataRateToString(iRf24DataRate));
+	snprintf_P(buf, sizeof(buf), PSTR("Datarate %-4s"), rf24DataRateToString(iRf24DataRate));
 
 	// use the line from function parameters
 	lcd.setCursor(1, line);
@@ -1146,24 +1150,6 @@ void menuSaveNodeAndGwEeprom(__attribute__((unused)) uint8_t param)
 	} 
 }
 
-void menuLoadNodeEeprom(__attribute__((unused)) uint8_t param)
-{
-	if (LCDML.FUNC_setup())
-	{
-		// TODO: This reads settings from eeprom but does not activate them -- confusing to the user!
-		loadEeprom();
-		LCD_clear();
-		print_LCD_line(F("Eeprom loaded"), 0, 0);
-	} 
-	if (LCDML.FUNC_loop())
-	{
-		if (LCDML.BT_checkAny()) // check if any button is pressed (enter, up, down, left, right)
-		{      
-			LCDML.FUNC_goBackToMenu();  // leave this function
-		}
-	}
-}
-
 void menuResetBuf(__attribute__((unused)) uint8_t param)
 {
 	if (LCDML.FUNC_setup())
@@ -1179,6 +1165,18 @@ void menuResetBuf(__attribute__((unused)) uint8_t param)
 			LCDML.FUNC_goBackToMenu();  // leave this function
 		}
 	}
+}
+
+void menuResetNode(__attribute__((unused)) uint8_t param)
+{
+	if (LCDML.FUNC_setup())
+	{
+		LCD_clear();
+		print_LCD_line(F("Restarting..."), 0, 0);
+		delay(restartDelayMs);
+		reset();
+		// Never return here...
+	} 
 }
 
 void menuBack(__attribute__((unused)) uint8_t param)
