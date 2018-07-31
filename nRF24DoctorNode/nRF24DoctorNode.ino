@@ -59,6 +59,12 @@ Change log:
 #include <MySensors.h>
 #include "shared/Generic.h"
 #include "shared/RadioStorage.h"
+#include <inttypes.h>
+
+#ifndef FLT_MAX
+// FLT_MAX is defined in float.h, but including it increases flash usage by 600 bytes or so....
+#define FLT_MAX (3.402823466e+38F)
+#endif
 
 //**** LCD *****
 #include <LiquidCrystal.h>                      // LCD display with parallel interface
@@ -190,7 +196,11 @@ const float uAperBit1 = ((Vref_volt/1024.0)/r1_ohm)*1.0e6;
 const float uAperBit2 = ((Vref_volt/1024.0)/r2_ohm)*1.0e6;
 const float uAperBit3 = ((Vref_volt/1024.0)/r3_ohm)*1.0e6;
 
-float SleepCurrent_uA 	 	= 20000000;			//Will show WAIT on display
+const float CurrentValueErrCap = -2.0;					// Will show 'Err cap' on display
+const float CurrentValueWait   = -1.0;					// Will show 'WAIT' on display
+const float CurrentValueErr    = 300000.0;				// Will show 'Err' on display
+
+float SleepCurrent_uA 	 	= CurrentValueWait;
 float TransmitCurrent_uA 	= 0;
 float ReceiveCurrent_uA  	= 0;
 
@@ -495,7 +505,7 @@ void statemachine()
 					SleepCurrent_uA = uAperBit3*GetAvgADCBits(iNrCurrentMeasurements);	//Even if SettledSleepCurrent_uA_reached has timed out it should have settled by now
 				}
 				else{		//Radio Cap > 1000uF - this will take too long....
-					SleepCurrent_uA = 20000001;			//Will show ERR CAP on display
+					SleepCurrent_uA = CurrentValueErrCap;
 				}
 			}
 			else {SleepCurrent_uA = SleepCurrent_uA_intermediate;}
@@ -828,39 +838,33 @@ void LCD_clear() {
 /*****************************************************************/
 /************************* MENU HANDLERS *************************/
 /*****************************************************************/
-void printBufCurrent(char *buf, int iBufSize, float fCurrent_uA, const char* label) {
-	//Check range for proper displaying	
-	if (fCurrent_uA==20000000){
-		snprintf_P(buf, iBufSize, PSTR("%s[mA]=WAIT"), label);
+char* printBufCurrent(char *buf, int size, float curr)
+{
+	if (CurrentValueErrCap == curr)
+	{
+		snprintf_P(buf, size, PSTR("Err cap"));
 	}
-	else if (fCurrent_uA==20000001){
-		snprintf_P(buf, iBufSize, PSTR("%s[mA]=Err CAP"), label);
-	}	
-	else if (fCurrent_uA > 1000){
-		int Current_mA = (int)(fCurrent_uA/1000);
-		if (Current_mA>=300){
-			snprintf_P(buf, iBufSize, PSTR("%s[mA]= ERR"), label);
-		}
-		else if (Current_mA>=100){
-			snprintf_P(buf, iBufSize, PSTR("%s[mA]=%4d"), label, Current_mA);
-		}
-		else if (Current_mA>=10){
-			int iDecCurrent = (int)(((fCurrent_uA/1000)-(float)Current_mA)*10+0.5);if (iDecCurrent>=10){iDecCurrent=iDecCurrent-10;Current_mA +=1;}
-			snprintf_P(buf, iBufSize, PSTR("%s[mA]=%2d.%1d"), label, Current_mA, iDecCurrent);
-		}
-		else {				
-			int iDecCurrent = (int)(((fCurrent_uA/1000)-(float)Current_mA)*100+0.5);if (iDecCurrent >=100){iDecCurrent=iDecCurrent-100;Current_mA +=1;}
-			snprintf_P(buf, iBufSize, PSTR("%s[mA]=%1d.%02d"), label, Current_mA, iDecCurrent);
-		}
+	else if (CurrentValueWait == curr)
+	{
+		snprintf_P(buf, size, PSTR("Wait"));
 	}
-	else if (fCurrent_uA < 100){		
-		int iCurrent_uA = (int)fCurrent_uA;
-		int iDecCurrent_uA = (int)((fCurrent_uA-(float)iCurrent_uA)*10+0.5); if (iDecCurrent_uA >= 10){iDecCurrent_uA=iDecCurrent_uA-10;iCurrent_uA +=1;}
-			snprintf_P(buf, iBufSize, PSTR("%s[uA]=%2d.%1d"), label, iCurrent_uA, iDecCurrent_uA);
-		}
-	else{
-		snprintf_P(buf, iBufSize, PSTR("%s[uA]=%4d"), label, (int)fCurrent_uA);
+	else if (curr >= CurrentValueErr)
+	{
+		snprintf_P(buf, size, PSTR("Err"));
 	}
+	else
+	{
+		char scalePrefix = 'u';
+		if (curr > 1000)
+		{
+			scalePrefix = 'm';
+			curr /= 1000.0;
+		}
+		const uint16_t currInt  = curr;
+		const uint8_t  currFrac = (curr - float(currInt)) * 100.0 + 0.5;
+		snprintf_P(buf, size, PSTR("%" PRIu16 ".%02" PRIu8 " %cA"), currInt, currFrac, scalePrefix);
+	}
+	return buf;
 }
 
 void menuPage(uint8_t param)
@@ -874,6 +878,7 @@ void menuPage(uint8_t param)
 	{
 		LCD_clear();
 		char buf[LCD_COLS+1];
+		char buf1[LCD_COLS+1];
 
 		if (transportHwError)
 		{
@@ -925,15 +930,15 @@ void menuPage(uint8_t param)
 					break;
 
 				case PAGE_TXRXPOWER:
-					printBufCurrent(buf,sizeof(buf), TransmitCurrent_uA, "TX");
+					snprintf_P(buf, sizeof(buf), PSTR("Tx %s"), printBufCurrent(buf1,sizeof(buf1), TransmitCurrent_uA) );
 					print_LCD_line(buf, 0, 0);
-					printBufCurrent(buf,sizeof(buf), ReceiveCurrent_uA, "RX");
+					snprintf_P(buf, sizeof(buf), PSTR("Rx %s"), printBufCurrent(buf1,sizeof(buf1), ReceiveCurrent_uA) );
 					print_LCD_line(buf, 1, 0);
 					break;
 
 				case PAGE_SLEEPPOWER:
 					currState = STATE_SLEEP;
-					printBufCurrent(buf,sizeof(buf), SleepCurrent_uA, "SLEEP");
+					snprintf_P(buf, sizeof(buf), PSTR("Sleep %s"), printBufCurrent(buf1,sizeof(buf1), SleepCurrent_uA) );
 					print_LCD_line(buf, 0, 0);
 					break;
 
