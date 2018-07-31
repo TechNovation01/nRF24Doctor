@@ -61,11 +61,6 @@ Change log:
 #include "shared/RadioStorage.h"
 #include <inttypes.h>
 
-#ifndef FLT_MAX
-// FLT_MAX is defined in float.h, but including it increases flash usage by 600 bytes or so....
-#define FLT_MAX (3.402823466e+38F)
-#endif
-
 //**** LCD *****
 #include <LiquidCrystal.h>                      // LCD display with parallel interface
 
