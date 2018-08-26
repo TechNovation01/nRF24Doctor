@@ -2,20 +2,29 @@
 
 #include <stdint.h>
 
-#define DEFAULT_DESTINATION_NODE	(0)				// Default 0 = gateway, Settable in Menu
-#define DEFAULT_PAYLOAD_SIZE		(2)				// 2 Bytes is the minimum for the Counter data
-#define DEFAULT_MESSAGE_RATE 		(10)
+#define DEFAULT_DESTINATION_NODE			(0)				// Default 0 = gateway, Settable in Menu
+#define DEFAULT_PAYLOAD_SIZE				(2)				// 2 Bytes is the minimum for the Counter data
+#define DEFAULT_MESSAGE_RATE 				(10)
+#define DEFAULT_CH_SCAN_MODE_STATE			(0)				// OFF
+#define DEFAULT_CH_SCAN_START				(0)
+#define DEFAULT_CH_SCAN_STOP 				(125)
+#define DEFAULT_CH_SCAN_MSG_PER_CHANNEL		(200)
+
 
 //**** EEPROM STORAGE LOCATIONS *****
-#define EEPROM_FLAG_MAGIC		0xA5u	// Indication contents are valid. Empty eeprom will contain 0xFF
-#define EEPROM_FLAG				0
-#define EEPROM_CHANNEL			1
-#define EEPROM_PA_LEVEL			2
-#define EEPROM_PA_LEVEL_GW		3
-#define EEPROM_DATARATE			4
-#define EEPROM_DESTINATION_NODE	5
-#define EEPROM_PAYLOAD_SIZE		6
-#define EEPROM_MESSAGE_RATE		7
+#define EEPROM_FLAG_MAGIC				0xA5u	// Indication contents are valid. Empty eeprom will contain 0xFF
+#define EEPROM_FLAG						0
+#define EEPROM_CHANNEL					1
+#define EEPROM_PA_LEVEL					2
+#define EEPROM_PA_LEVEL_GW				3
+#define EEPROM_DATARATE					4
+#define EEPROM_DESTINATION_NODE			5
+#define EEPROM_PAYLOAD_SIZE				6
+#define EEPROM_MESSAGE_RATE				7
+#define EEPROM_CH_SCAN_MODE_STATE		8
+#define EEPROM_CH_SCAN_START			9	
+#define EEPROM_CH_SCAN_STOP				10
+#define EEPROM_CH_SCAN_MSG_PER_CHANNEL 	11
 
 #ifndef MY_GATEWAY_FEATURE
 // Node-only parameters
@@ -23,6 +32,11 @@ uint8_t iRf24PaLevelGw;		//PA Level for the Gateway
 uint8_t iPayloadSize;
 uint8_t iSetMsgRate;
 uint8_t iDestinationNode;
+
+bool bChannelScanState;
+uint8_t iRf24ChannelScanStart;
+uint8_t iRf24ChannelScanStop;
+uint8_t iScanMsgPerChannel;
 #endif
 
 void saveEepromAndReset();
@@ -56,10 +70,14 @@ void loadDefaults()
 #endif
 	iRf24DataRate		= DEFAULT_RF24_DATARATE;
 #ifndef MY_GATEWAY_FEATURE
-	iRf24PaLevelGw		= DEFAULT_RF24_PA_LEVEL_GW;
-	iDestinationNode	= DEFAULT_DESTINATION_NODE;
-	iPayloadSize		= DEFAULT_PAYLOAD_SIZE;
-	iSetMsgRate			= DEFAULT_MESSAGE_RATE;
+	iRf24PaLevelGw			= DEFAULT_RF24_PA_LEVEL_GW;
+	iDestinationNode		= DEFAULT_DESTINATION_NODE;
+	iPayloadSize			= DEFAULT_PAYLOAD_SIZE;
+	iSetMsgRate				= DEFAULT_MESSAGE_RATE;
+	bChannelScanState		= DEFAULT_CH_SCAN_MODE_STATE;
+	iRf24ChannelScanStart 	= DEFAULT_CH_SCAN_START;
+	iRf24ChannelScanStop 	= DEFAULT_CH_SCAN_STOP;
+	iScanMsgPerChannel 		= DEFAULT_CH_SCAN_MSG_PER_CHANNEL;
 #endif
 }
 
@@ -70,14 +88,18 @@ void loadEeprom()
 		// Eeprom contents are valid
     	Sprintln(F("Read eeprom"));
 
-		iRf24Channel 		= loadState(EEPROM_CHANNEL);
-		iRf24PaLevel 		= loadState(EEPROM_PA_LEVEL);
-		iRf24DataRate 		= loadState(EEPROM_DATARATE);
+		iRf24Channel 			= loadState(EEPROM_CHANNEL);
+		iRf24PaLevel 			= loadState(EEPROM_PA_LEVEL);
+		iRf24DataRate 			= loadState(EEPROM_DATARATE);
 #ifndef MY_GATEWAY_FEATURE
-		iRf24PaLevelGw 		= loadState(EEPROM_PA_LEVEL_GW);
-		iDestinationNode	= loadState(EEPROM_DESTINATION_NODE);
-		iPayloadSize		= loadState(EEPROM_PAYLOAD_SIZE);
-		iSetMsgRate			= loadState(EEPROM_MESSAGE_RATE);	 
+		iRf24PaLevelGw 			= loadState(EEPROM_PA_LEVEL_GW);
+		iDestinationNode		= loadState(EEPROM_DESTINATION_NODE);
+		iPayloadSize			= loadState(EEPROM_PAYLOAD_SIZE);
+		iSetMsgRate				= loadState(EEPROM_MESSAGE_RATE);	 
+		bChannelScanState		= loadState(EEPROM_CH_SCAN_MODE_STATE);		
+		iRf24ChannelScanStart 	= loadState(EEPROM_CH_SCAN_START);	
+		iRf24ChannelScanStop 	= loadState(EEPROM_CH_SCAN_STOP);
+		iScanMsgPerChannel 		= loadState(EEPROM_CH_SCAN_MSG_PER_CHANNEL);
 #endif
 	}
 	else
@@ -101,6 +123,10 @@ void saveEeprom()
 	saveState(EEPROM_DESTINATION_NODE, iDestinationNode);
 	saveState(EEPROM_PAYLOAD_SIZE, iPayloadSize);
 	saveState(EEPROM_MESSAGE_RATE, iSetMsgRate);
+	saveState(EEPROM_CH_SCAN_MODE_STATE, bChannelScanState);
+	saveState(EEPROM_CH_SCAN_START, iRf24ChannelScanStart);
+	saveState(EEPROM_CH_SCAN_STOP, iRf24ChannelScanStop);
+	saveState(EEPROM_CH_SCAN_MSG_PER_CHANNEL, iScanMsgPerChannel);	
 #endif
 
 	// Mark eeprom contents valid
