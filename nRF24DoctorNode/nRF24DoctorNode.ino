@@ -151,6 +151,8 @@ static Bounce button = Bounce();
 //**** MySensors Messages ****
 #define CHILD_ID_COUNTER 			(0)
 #define CHILD_ID_UPDATE_GATEWAY 	(1)
+#define CHILD_ID_CH_SCAN 			(2)
+
 MyMessage MsgCounter(CHILD_ID_COUNTER, V_CUSTOM);   				//Send Message Counter value
 
 // Actual data exchanged in a message 
@@ -371,7 +373,7 @@ void before() {						//Initialization before the MySensors library starts up
 
 	// Load radio settings from eeprom
 	loadEeprom();
-	logRadioSettings();
+	logRadioSettings(1);
 }
 
 void setup() {
@@ -532,6 +534,7 @@ void statemachine()
 				if (get_rf24_register_arc_cnt()>0){iNrOfMsgWithArc++;}	//Collect  Arc Statistics
 				if (iMessageCounter==iScanMsgPerChannel){
 					print_scan_channel_results();
+					send_scan_channel_results_to_gateway(updateGatewayNumAttempts);
 					if (iRf24Channel < iRf24ChannelScanStop){	//Next Channel
 						iRf24Channel++;
 						bUpdateGateway = true;
@@ -702,6 +705,13 @@ void print_scan_channel_results(){
 	Serial.print(F("\t MsgWithArc:"));Serial.println(iNrOfMsgWithArc);
 }
 
+void send_scan_channel_results_to_gateway(uint8_t retries){
+	MyMessage MsgChScanResults(CHILD_ID_CH_SCAN, V_CUSTOM);
+	MsgChScanResults.setDestination(0);
+	serializeChScanResults( MsgChScanResults, static_cast<uint8_t>(CONSTRAIN_HI(iMessageCounter,255)), static_cast<uint8_t>(CONSTRAIN_HI(iNrFailedMessages,255)), static_cast<uint8_t>(CONSTRAIN_HI(CONSTRAIN_LO(iNrNAckMessages,1)-1,255)),CONSTRAIN_HI(iNrOfMsgWithArc,255));
+	uint8_t retriesRemaining = retries;
+	while ( send(MsgChScanResults, true)==false && retriesRemaining>0){retriesRemaining--;}
+}
 /********************************************************************************/
 /************************* MYSENSORS INDICATION CALLBACK ************************/
 /********************************************************************************/
