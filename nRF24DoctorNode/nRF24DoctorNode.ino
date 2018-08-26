@@ -149,8 +149,8 @@ static Encoder encoder(ENCODER_A_PIN, ENCODER_B_PIN);
 static Bounce button = Bounce(); 
 
 //**** MySensors Messages ****
-#define CHILD_ID_COUNTER 0
-#define CHILD_ID_UPDATE_GATEWAY 0
+#define CHILD_ID_COUNTER 			(0)
+#define CHILD_ID_UPDATE_GATEWAY 	(1)
 MyMessage MsgCounter(CHILD_ID_COUNTER, V_CUSTOM);   				//Send Message Counter value
 
 // Actual data exchanged in a message 
@@ -176,6 +176,7 @@ boolean bArrayNAckMessages[iMaxNumberOfMessages] = { 0 };			// Array for moving 
 uint16_t iNrFailedMessages = 0;            							// total of Failed Messages
 uint16_t iNrNAckMessages = 0;              							// total of Not Acknowledged Messages
 uint16_t iMessageCounter = 0;
+uint8_t iNrOfMsgWithArc = 0;
 
 //**** Timing ****
 const uint8_t iNrTimeDelays = 10;
@@ -391,6 +392,7 @@ void setup() {
 	//**** MENU *****
 	LCDML_setup(_LCDML_DISP_cnt);
 	LCDML.SCREEN_disable();
+	if (bChannelScanState){LCDML.OTHER_jumpToID(11, 0);} 	//Jump to Channel Scanning Page @ Startup
 }
 
 void presentation() {
@@ -478,7 +480,7 @@ void statemachine()
 			getMeanAndMaxFromArray(&iMeanDelayFirstHop_ms,&iMaxDelayFirstHop_ms,lTimeDelayBuffer_FirstHop_us,iNrTimeDelays);
 			getMeanAndMaxFromArray(&iMeanDelayDestination_ms,&iMaxDelayDestination_ms,lTimeDelayBuffer_Destination_us,iNrTimeDelays);
 			
-			currState = STATE_IDLE;
+			currState = STATE_CH_SCAN;
 			break;
 
 		case STATE_SLEEP:
@@ -524,6 +526,24 @@ void statemachine()
 			currState = STATE_IDLE;
 			break;		
 		}
+
+		case STATE_CH_SCAN:
+			if (bChannelScanState){
+				if (get_rf24_register_arc_cnt()>0){iNrOfMsgWithArc++;}	//Collect  Arc Statistics
+				if (iMessageCounter==iScanMsgPerChannel){
+					print_scan_channel_results();
+					if (iRf24Channel < iRf24ChannelScanStop){	//Next Channel
+						iRf24Channel++;
+						bUpdateGateway = true;
+						iNrOfMsgWithArc = 0;
+					}
+					else{menuStopScan(0);}						//Channel Scan Complete, Exit Page
+				}
+				menuScanStatus(0);								//Regular Ch Scan: Update the Scan Status Page
+			}
+			currState = STATE_IDLE;
+			break;
+		
 		case STATE_START_GW_UPDATE:
 			updateGatewayAttemptsRemaining = updateGatewayNumAttempts;
 			currState = STATE_TX_GW_UPDATE;
@@ -535,7 +555,6 @@ void statemachine()
 				--updateGatewayAttemptsRemaining;
 				MyMessage MsgUpdateGateway(CHILD_ID_UPDATE_GATEWAY, V_CUSTOM);
 				MsgUpdateGateway.setDestination(0);
-				MsgUpdateGateway.setSensor(250);
 				serializeGwSettings( MsgUpdateGateway );
 
 				// Transmit message with software ack request (returned in "receive function")
@@ -673,6 +692,15 @@ void MY_RF24_startListening()
 // 	// timing
 // 	delayMicroseconds(100);
 // }
+/*****************************************************************************/
+/*************************** CHANNEL SCAN FUNCTIONS **************************/
+/*****************************************************************************/
+void print_scan_channel_results(){
+	Serial.print(F("\t MsgTotal:"));Serial.print(iMessageCounter);
+	Serial.print(F("\t MsgFailed:"));Serial.print(iNrFailedMessages);
+	Serial.print(F("\t MsgNack:"));Serial.print(CONSTRAIN_LO(iNrNAckMessages,1)-1); //Apparently the last ack is not yet in when printing the results.
+	Serial.print(F("\t MsgWithArc:"));Serial.println(iNrOfMsgWithArc);
+}
 
 /********************************************************************************/
 /************************* MYSENSORS INDICATION CALLBACK ************************/
@@ -1045,7 +1073,6 @@ void menuStartScan(__attribute__((unused)) uint8_t param)
 {
 	if (!bChannelScanState){iRf24Channel = iRf24ChannelScanStart;}	//Initialize Channel on start of scan 
 	bChannelScanState = true;
-	Sprint("bChState4:");Sprintln(bChannelScanState);
 	if (LCDML.FUNC_setup())
 	{
 		// Trigger the gateway update sequence
@@ -1079,7 +1106,16 @@ void menuStartScan(__attribute__((unused)) uint8_t param)
 void menuScanStatus(uint8_t line)
 {
 	char buf[LCD_COLS+1-1];
-	snprintf_P(buf, sizeof(buf), PSTR("CH%-3d MSG:%3d"),iRf24Channel , iMessageCounter);
+	static bool bPrevUpdateGateway = false;
+	if (bPrevUpdateGateway && !bUpdateGateway){
+		snprintf_P(buf, sizeof(buf), PSTR("Retrying Gw..."));
+		bUpdateGateway = true;	//just try as long until interrupted by user.
+		saveState(EEPROM_CH_SCAN_MODE_STATE, bChannelScanState);		
+	}
+	else{
+		snprintf_P(buf, sizeof(buf), PSTR("CH%-3d MSG:%3d"),iRf24Channel , iMessageCounter);
+	}
+	bPrevUpdateGateway = bUpdateGateway;
 	lcd.setCursor(1, line);
 	lcd.print(buf);
 }
@@ -1295,6 +1331,8 @@ void menuStopScan(__attribute__((unused)) uint8_t param)
 {
 	if (LCDML.FUNC_setup())
 	{
+		bChannelScanState = false;
+		saveState(EEPROM_CH_SCAN_MODE_STATE, bChannelScanState);
 		LCDML.FUNC_goBackToMenu(1);
 	}
 }
