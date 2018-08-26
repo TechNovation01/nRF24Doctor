@@ -699,6 +699,7 @@ void MY_RF24_startListening()
 /*************************** CHANNEL SCAN FUNCTIONS **************************/
 /*****************************************************************************/
 void print_scan_channel_results(){
+	logRadioSettings(0);
 	Serial.print(F("\t MsgTotal:"));Serial.print(iMessageCounter);
 	Serial.print(F("\t MsgFailed:"));Serial.print(iNrFailedMessages);
 	Serial.print(F("\t MsgNack:"));Serial.print(CONSTRAIN_LO(iNrNAckMessages,1)-1); //Apparently the last ack is not yet in when printing the results.
