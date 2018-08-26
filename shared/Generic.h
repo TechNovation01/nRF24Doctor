@@ -2,6 +2,7 @@
 
 #define COUNT_OF(x) 			((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
 #define CONSTRAIN_HI(amt,high)	((amt)>(high)?(high):(amt))
+#define CONSTRAIN_LO(amt,low)	((amt)<(low)?(low):(amt))
 
 #ifdef LOCAL_DEBUG
 #define Sprint(a)   (Serial.print(a))			// macro as substitute for print, enable if no print wanted

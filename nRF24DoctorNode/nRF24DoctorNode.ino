@@ -102,27 +102,35 @@ LCDML_addAdvanced (2  , LCDML_0         , 3    , NULL              , "Msg Rate  
 LCDML_addAdvanced (3  , LCDML_0         , 4    , NULL              , "Counters     >"  , menuPage         , PAGE_COUNTERS    , _LCDML_TYPE_default);
 LCDML_addAdvanced (4  , LCDML_0         , 5    , NULL              , "TxRx Power   >"  , menuPage         , PAGE_TXRXPOWER   , _LCDML_TYPE_default);
 LCDML_addAdvanced (5  , LCDML_0         , 6    , NULL              , "Sleep Power  >"  , menuPage         , PAGE_SLEEPPOWER  , _LCDML_TYPE_default);
-LCDML_add         (6  , LCDML_0         , 7                        , "Settings     >"  , NULL);
-LCDML_add         (7  , LCDML_0_7       , 1                        , "Radio        >"  , NULL);
-LCDML_addAdvanced (8  , LCDML_0_7_1     , 1    , NULL              , ""                , menuCfgChannel   , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (9  , LCDML_0_7_1     , 2    , NULL              , ""                , menuCfgGwNode    , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (10 , LCDML_0_7_1     , 3    , NULL              , ""                , menuCfgGwPa      , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (11 , LCDML_0_7_1     , 4    , NULL              , ""                , menuCfgNodePa    , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (12 , LCDML_0_7_1     , 5    , NULL              , ""                , menuCfgRate      , 0                , _LCDML_TYPE_dynParam);
-LCDML_add         (13 , LCDML_0_7_1     , 6                        , "Back         <"  , menuBack);
-LCDML_add         (14 , LCDML_0_7       , 2                        , "Doctor       >"  , NULL);
-LCDML_addAdvanced (15 , LCDML_0_7_2     , 1    , NULL              , ""  			   , menuCfgPayload   , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (16 , LCDML_0_7_2     , 2    , NULL              , ""  			   , menuCfgMsgRate   , 0                , _LCDML_TYPE_dynParam);
-LCDML_add         (17 , LCDML_0_7_2     , 3                        , "Reset buff   x"  , menuResetBuf);
-LCDML_add         (18 , LCDML_0_7_2     , 4                        , "Back         <"  , menuBack);
-LCDML_add         (19 , LCDML_0_7       , 3                        , "Eeprom       >"  , NULL);
-LCDML_add         (20 , LCDML_0_7_3     , 1                        , "Save node    x"  , menuSaveNodeEeprom);
-LCDML_add         (21 , LCDML_0_7_3     , 2                        , "Save node&gw x"  , menuSaveNodeAndGwEeprom);
-LCDML_add         (22 , LCDML_0_7_3     , 3                        , "Defaults nodex"  , menuDefaultNodeEeprom);
-LCDML_add         (23 , LCDML_0_7_3     , 4                        , "Back         <"  , menuBack);
-LCDML_add         (24 , LCDML_0_7       , 4                        , "Reset node   x"  , menuResetNode);
-LCDML_add         (25 , LCDML_0_7       , 5                        , "Back         <"  , menuBack);
-#define _LCDML_DISP_cnt    25   // Should equal last id in menu
+LCDML_add         (6  , LCDML_0         , 7                        , "Channel Scan >"  , NULL);
+LCDML_addAdvanced (7  , LCDML_0_7     	, 1    , NULL              , ""                , menuCfgScanChStart	, 0              , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (8  , LCDML_0_7     	, 2    , NULL              , ""                , menuCfgScanChStop	, 0              , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (9  , LCDML_0_7     	, 3    , NULL              , ""                , menuCfgScanMsgPerCh, 0              , _LCDML_TYPE_dynParam);
+LCDML_add 		  (10 , LCDML_0_7     	, 4    		               , "Start Scan   >"  , menuStartScan);
+LCDML_addAdvanced (11 , LCDML_0_7_4     , 1    , NULL              , ""  			   , menuScanStatus, 0      		 , _LCDML_TYPE_dynParam);
+LCDML_add 		  (12 , LCDML_0_7_4     , 2    					   , "Stop & Back  <"  , menuStopScan);
+LCDML_add 		  (13 , LCDML_0_7       , 5                        , "Back         <"  , menuBack);
+LCDML_add         (14 , LCDML_0         , 8                        , "Settings     >"  , NULL);
+LCDML_add         (15 , LCDML_0_8       , 1                        , "Radio        >"  , NULL);
+LCDML_addAdvanced (16 , LCDML_0_8_1     , 1    , NULL              , ""                , menuCfgChannel   , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (17 , LCDML_0_8_1     , 2    , NULL              , ""                , menuCfgGwNode    , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (18 , LCDML_0_8_1     , 3    , NULL              , ""                , menuCfgGwPa      , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (19 , LCDML_0_8_1     , 4    , NULL              , ""                , menuCfgNodePa    , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (20 , LCDML_0_8_1     , 5    , NULL              , ""                , menuCfgRate      , 0                , _LCDML_TYPE_dynParam);
+LCDML_add         (21 , LCDML_0_8_1     , 6                        , "Back         <"  , menuBack);
+LCDML_add         (22 , LCDML_0_8       , 2                        , "Doctor       >"  , NULL);
+LCDML_addAdvanced (23 , LCDML_0_8_2     , 1    , NULL              , ""  			   , menuCfgPayload   , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (24 , LCDML_0_8_2     , 2    , NULL              , ""  			   , menuCfgMsgRate   , 0                , _LCDML_TYPE_dynParam);
+LCDML_add         (25 , LCDML_0_8_2     , 3                        , "Reset buff   x"  , menuResetBuf);
+LCDML_add         (26 , LCDML_0_8_2     , 4                        , "Back         <"  , menuBack);
+LCDML_add         (27 , LCDML_0_8       , 3                        , "Eeprom       >"  , NULL);
+LCDML_add         (28 , LCDML_0_8_3     , 1                        , "Save node    x"  , menuSaveNodeEeprom);
+LCDML_add         (29 , LCDML_0_8_3     , 2                        , "Save node&gw x"  , menuSaveNodeAndGwEeprom);
+LCDML_add         (30 , LCDML_0_8_3     , 3                        , "Defaults nodex"  , menuDefaultNodeEeprom);
+LCDML_add         (31 , LCDML_0_8_3     , 4                        , "Back         <"  , menuBack);
+LCDML_add         (32 , LCDML_0_8       , 4                        , "Reset node   x"  , menuResetNode);
+LCDML_add         (33 , LCDML_0_8       , 5                        , "Back         <"  , menuBack);
+#define _LCDML_DISP_cnt    33   // Should equal last id in menu
 
 
 
@@ -141,8 +149,10 @@ static Encoder encoder(ENCODER_A_PIN, ENCODER_B_PIN);
 static Bounce button = Bounce(); 
 
 //**** MySensors Messages ****
-#define CHILD_ID_COUNTER 0
-#define CHILD_ID_UPDATE_GATEWAY 0
+#define CHILD_ID_COUNTER 			(0)
+#define CHILD_ID_UPDATE_GATEWAY 	(1)
+#define CHILD_ID_CH_SCAN 			(2)
+
 MyMessage MsgCounter(CHILD_ID_COUNTER, V_CUSTOM);   				//Send Message Counter value
 
 // Actual data exchanged in a message 
@@ -168,6 +178,7 @@ boolean bArrayNAckMessages[iMaxNumberOfMessages] = { 0 };			// Array for moving 
 uint16_t iNrFailedMessages = 0;            							// total of Failed Messages
 uint16_t iNrNAckMessages = 0;              							// total of Not Acknowledged Messages
 uint16_t iMessageCounter = 0;
+uint8_t iNrOfMsgWithArc = 0;
 
 //**** Timing ****
 const uint8_t iNrTimeDelays = 10;
@@ -362,7 +373,7 @@ void before() {						//Initialization before the MySensors library starts up
 
 	// Load radio settings from eeprom
 	loadEeprom();
-	logRadioSettings();
+	logRadioSettings(1);
 }
 
 void setup() {
@@ -383,6 +394,7 @@ void setup() {
 	//**** MENU *****
 	LCDML_setup(_LCDML_DISP_cnt);
 	LCDML.SCREEN_disable();
+	if (bChannelScanState){LCDML.OTHER_jumpToID(11, 0);} 	//Jump to Channel Scanning Page @ Startup
 }
 
 void presentation() {
@@ -406,6 +418,8 @@ void loop()
 enum state {	STATE_IDLE,
 				// Regular measurement states
 				STATE_TX, STATE_RX, STATE_PROCESS_DATA, STATE_SLEEP,								
+				// Channel scanning Mode state
+				STATE_CH_SCAN,
 				// Gateway update states
 				STATE_START_GW_UPDATE, STATE_TX_GW_UPDATE, STATE_FAILED_GW_UPDATE,
 };
@@ -468,7 +482,7 @@ void statemachine()
 			getMeanAndMaxFromArray(&iMeanDelayFirstHop_ms,&iMaxDelayFirstHop_ms,lTimeDelayBuffer_FirstHop_us,iNrTimeDelays);
 			getMeanAndMaxFromArray(&iMeanDelayDestination_ms,&iMaxDelayDestination_ms,lTimeDelayBuffer_Destination_us,iNrTimeDelays);
 			
-			currState = STATE_IDLE;
+			currState = STATE_CH_SCAN;
 			break;
 
 		case STATE_SLEEP:
@@ -514,6 +528,25 @@ void statemachine()
 			currState = STATE_IDLE;
 			break;		
 		}
+
+		case STATE_CH_SCAN:
+			if (bChannelScanState){
+				if (get_rf24_register_arc_cnt()>0){iNrOfMsgWithArc++;}	//Collect  Arc Statistics
+				if (iMessageCounter==iScanMsgPerChannel){
+					print_scan_channel_results();
+					send_scan_channel_results_to_gateway(updateGatewayNumAttempts);
+					if (iRf24Channel < iRf24ChannelScanStop){	//Next Channel
+						iRf24Channel++;
+						bUpdateGateway = true;
+						iNrOfMsgWithArc = 0;
+					}
+					else{menuStopScan(0);}						//Channel Scan Complete, Exit Page
+				}
+				menuScanStatus(0);								//Regular Ch Scan: Update the Scan Status Page
+			}
+			currState = STATE_IDLE;
+			break;
+		
 		case STATE_START_GW_UPDATE:
 			updateGatewayAttemptsRemaining = updateGatewayNumAttempts;
 			currState = STATE_TX_GW_UPDATE;
@@ -525,7 +558,6 @@ void statemachine()
 				--updateGatewayAttemptsRemaining;
 				MyMessage MsgUpdateGateway(CHILD_ID_UPDATE_GATEWAY, V_CUSTOM);
 				MsgUpdateGateway.setDestination(0);
-				MsgUpdateGateway.setSensor(250);
 				serializeGwSettings( MsgUpdateGateway );
 
 				// Transmit message with software ack request (returned in "receive function")
@@ -663,7 +695,24 @@ void MY_RF24_startListening()
 // 	// timing
 // 	delayMicroseconds(100);
 // }
+/*****************************************************************************/
+/*************************** CHANNEL SCAN FUNCTIONS **************************/
+/*****************************************************************************/
+void print_scan_channel_results(){
+	logRadioSettings(0);
+	Serial.print(F("\t MsgTotal:"));Serial.print(iMessageCounter);
+	Serial.print(F("\t MsgFailed:"));Serial.print(iNrFailedMessages);
+	Serial.print(F("\t MsgNack:"));Serial.print(CONSTRAIN_LO(iNrNAckMessages,1)-1); //Apparently the last ack is not yet in when printing the results.
+	Serial.print(F("\t MsgWithArc:"));Serial.println(iNrOfMsgWithArc);
+}
 
+void send_scan_channel_results_to_gateway(uint8_t retries){
+	MyMessage MsgChScanResults(CHILD_ID_CH_SCAN, V_CUSTOM);
+	MsgChScanResults.setDestination(0);
+	serializeChScanResults( MsgChScanResults, static_cast<uint8_t>(CONSTRAIN_HI(iMessageCounter,255)), static_cast<uint8_t>(CONSTRAIN_HI(iNrFailedMessages,255)), static_cast<uint8_t>(CONSTRAIN_HI(CONSTRAIN_LO(iNrNAckMessages,1)-1,255)),CONSTRAIN_HI(iNrOfMsgWithArc,255));
+	uint8_t retriesRemaining = retries;
+	while ( send(MsgChScanResults, true)==false && retriesRemaining>0){retriesRemaining--;}
+}
 /********************************************************************************/
 /************************* MYSENSORS INDICATION CALLBACK ************************/
 /********************************************************************************/
@@ -983,6 +1032,107 @@ void menuCfgEntry( uint8_t &value )
 	if ((value > 0)   and LCDML.BT_checkDown()) value--;
 }
 
+void menuCfgScanChStart(uint8_t line)
+{ 
+	if (line == LCDML.MENU_getCursorPos()) 
+	{
+		menuCfgEntry( iRf24ChannelScanStart );
+		iRf24ChannelScanStart = CONSTRAIN_HI( iRf24ChannelScanStart, 125 );
+	} 
+
+	char buf[LCD_COLS+1];
+	snprintf_P(buf, sizeof(buf), PSTR("Start Ch. %3d"), iRf24ChannelScanStart);
+
+	// use the line from function parameters
+	lcd.setCursor(1, line);
+	lcd.print(buf); 
+}
+
+void menuCfgScanChStop(uint8_t line)
+{ 
+	if (line == LCDML.MENU_getCursorPos()) 
+	{
+		menuCfgEntry( iRf24ChannelScanStop );
+		iRf24ChannelScanStop = CONSTRAIN_HI( iRf24ChannelScanStop, 125 );
+	} 
+
+	char buf[LCD_COLS+1];
+	snprintf_P(buf, sizeof(buf), PSTR("Stop  Ch. %3d"), iRf24ChannelScanStop);
+
+	// use the line from function parameters
+	lcd.setCursor(1, line);
+	lcd.print(buf); 
+}
+
+void menuCfgScanMsgPerCh(uint8_t line)
+{ 
+	if (line == LCDML.MENU_getCursorPos()) 
+	{
+		menuCfgEntry( iScanMsgPerChannel );
+		iScanMsgPerChannel = CONSTRAIN_HI( iScanMsgPerChannel, 255 );
+	} 
+
+	char buf[LCD_COLS+1];
+	snprintf_P(buf, sizeof(buf), PSTR("Msg/Ch.  %4d"), iScanMsgPerChannel);
+
+	// use the line from function parameters
+	lcd.setCursor(1, line);
+	lcd.print(buf); 
+}
+
+void menuStartScan(__attribute__((unused)) uint8_t param)
+{
+	if (!bChannelScanState){iRf24Channel = iRf24ChannelScanStart;}	//Initialize Channel on start of scan 
+	bChannelScanState = true;
+	if (LCDML.FUNC_setup())
+	{
+		// Trigger the gateway update sequence
+		bUpdateGateway = true;
+		LCD_clear();
+		LCDML.FUNC_setLoopInterval(100);
+	}
+
+	if (LCDML.FUNC_loop())
+	{
+		static bool prevUpdateGateway = true;
+		if (not bUpdateGateway)
+		{
+			// Gateway update finished with error
+			if (prevUpdateGateway != bUpdateGateway)
+			{
+				// Print message only once
+				print_LCD_line(F("Failed"), 0, 0);
+			}
+			if (LCDML.BT_checkAny()) // check if any button is pressed (enter, up, down, left, right)
+			{      
+				LCDML.FUNC_goBackToMenu();  // leave this function
+				bChannelScanState = false;
+				saveState(EEPROM_CH_SCAN_MODE_STATE, bChannelScanState);				
+			}
+		}
+		prevUpdateGateway = bUpdateGateway;
+	} 
+}
+
+void menuScanStatus(uint8_t line)
+{
+	char buf[LCD_COLS+1-1];
+	static bool bPrevUpdateGateway = false;
+	if (bPrevUpdateGateway && !bUpdateGateway){
+		snprintf_P(buf, sizeof(buf), PSTR("Retrying Gw..."));
+		bUpdateGateway = true;	//just try as long until interrupted by user.
+		saveState(EEPROM_CH_SCAN_MODE_STATE, bChannelScanState);		
+	}
+	else{
+		snprintf_P(buf, sizeof(buf), PSTR("CH%-3d MSG:%3d"),iRf24Channel , iMessageCounter);
+	}
+	bPrevUpdateGateway = bUpdateGateway;
+	lcd.setCursor(1, line);
+	lcd.print(buf);
+}
+
+
+
 void menuCfgPayload(uint8_t line)
 { 
 	if (line == LCDML.MENU_getCursorPos()) 
@@ -1186,4 +1336,14 @@ void menuBack(__attribute__((unused)) uint8_t param)
 		// Go one level up
 		LCDML.FUNC_goBackToMenu(1);
 	} 
+}
+
+void menuStopScan(__attribute__((unused)) uint8_t param)
+{
+	if (LCDML.FUNC_setup())
+	{
+		bChannelScanState = false;
+		saveState(EEPROM_CH_SCAN_MODE_STATE, bChannelScanState);
+		LCDML.FUNC_goBackToMenu(1);
+	}
 }
