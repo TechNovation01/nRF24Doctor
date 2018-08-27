@@ -562,35 +562,37 @@ void statemachine()
 		case STATE_CH_SCAN_WAIT:
 			if (not bChannelScanner)
 			{
+				// Requested to stop scanner
 				currState = STATE_IDLE;
 				break;
 			}
-			if ((micros() - timestamp) >= SCANNEL_SCAN_MEASURE_TIME_US)
+			if ((micros() - timestamp) < SCANNEL_SCAN_MEASURE_TIME_US)
 			{
-				if (RF24_getReceivedPowerDetector())
-				{
-					// Determine bucket and increase vote
-					uint8_t bucket = (iRf24ChannelScanCurrent-iRf24ChannelScanStart) * CHANNEL_SCAN_NUM_BUCKETS / (iRf24ChannelScanStop-iRf24ChannelScanStart+1);
-					CONSTRAIN_HI(bucket, COUNT_OF(channelScanBuckets)-1);	// just to be sure...
-					if (channelScanBuckets[bucket] < 255)
-					{
-						++channelScanBuckets[bucket];
-					}
-				}
-				if (iRf24ChannelScanCurrent >= iRf24ChannelScanStop)
-				{
-					for (size_t i = 0; i < COUNT_OF(channelScanBuckets); ++i)
-					{
-						Sprint(channelScanBuckets[i]);
-						Sprint('\t');
-					}
-					Sprintln();
-					currState = STATE_CH_SCAN_RESTART;
-					break;
-				}
-				++iRf24ChannelScanCurrent;
-				currState = STATE_CH_SCAN_MEASURE;
+				break;
 			}
+			if (RF24_getReceivedPowerDetector())
+			{
+				// Determine bucket and increase vote
+				uint8_t bucket = (iRf24ChannelScanCurrent-iRf24ChannelScanStart) * CHANNEL_SCAN_NUM_BUCKETS / (iRf24ChannelScanStop-iRf24ChannelScanStart+1);
+				bucket = CONSTRAIN_HI(bucket, COUNT_OF(channelScanBuckets)-1);	// just to be sure...
+				if (channelScanBuckets[bucket] < 255)
+				{
+					++channelScanBuckets[bucket];
+				}
+			}
+			if (iRf24ChannelScanCurrent >= iRf24ChannelScanStop)
+			{
+				for (size_t i = 0; i < COUNT_OF(channelScanBuckets); ++i)
+				{
+					Sprint(channelScanBuckets[i]);
+					Sprint('\t');
+				}
+				Sprintln();
+				currState = STATE_CH_SCAN_RESTART;
+				break;
+			}
+			++iRf24ChannelScanCurrent;
+			currState = STATE_CH_SCAN_MEASURE;
 			break;
 
 		case STATE_START_GW_UPDATE:
