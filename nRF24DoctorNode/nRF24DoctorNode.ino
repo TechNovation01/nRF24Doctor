@@ -228,7 +228,10 @@ bool transportHwError = false;
 static uint8_t iRf24ChannelScanStart = 0;
 static uint8_t iRf24ChannelScanStop  = NRF24_MAX_CHANNEL;
 static uint8_t iRf24ChannelScanCurrent = 0;
-#define CHANNEL_SCAN_NUM_BUCKETS (5*8)
+#define LCD_NUM_SPECIAL_CHARS    (8)
+#define LCD_WIDTH_SPECIAL_CHARS  (5)
+#define LCD_HEIGHT_SPECIAL_CHARS (8)
+#define CHANNEL_SCAN_NUM_BUCKETS (LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS)
 static uint8_t channelScanBuckets[CHANNEL_SCAN_NUM_BUCKETS];
 static bool bChannelScanner = false;
 #define SCANNEL_SCAN_MEASURE_TIME_US (5000)
@@ -366,12 +369,7 @@ void before() {						//Initialization before the MySensors library starts up
 	//  Wire.begin();  // I2C
 	lcd.clear();
 	lcd.begin(LCD_COLS, LCD_ROWS);
-	// set special chars for scrollbar
-	lcd.createChar(0, (uint8_t*)scroll_bar[0]);
-	lcd.createChar(1, (uint8_t*)scroll_bar[1]);
-	lcd.createChar(2, (uint8_t*)scroll_bar[2]);
-	lcd.createChar(3, (uint8_t*)scroll_bar[3]);
-	lcd.createChar(4, (uint8_t*)scroll_bar[4]);  
+	LCD_SetScrollbarChars();
 	//lcd.setBacklight(HIGH);
 
 	// Load radio settings from eeprom
@@ -911,6 +909,16 @@ void LCD_clear() {
 	lcd.clear();
 }
 
+void LCD_SetScrollbarChars()
+{
+	// set special chars for scrollbar
+	lcd.createChar(0, (uint8_t*)scroll_bar[0]);
+	lcd.createChar(1, (uint8_t*)scroll_bar[1]);
+	lcd.createChar(2, (uint8_t*)scroll_bar[2]);
+	lcd.createChar(3, (uint8_t*)scroll_bar[3]);
+	lcd.createChar(4, (uint8_t*)scroll_bar[4]);  
+}
+
 /*****************************************************************/
 /************************* MENU HANDLERS *************************/
 /*****************************************************************/
@@ -1020,9 +1028,38 @@ void menuPage(uint8_t param)
 					break;
 
 				case PAGE_SCANNER:
-					bChannelScanner = not ButtonPressed;
-					snprintf_P(buf, sizeof(buf), PSTR("Scan") );
-					print_LCD_line(buf, 0, 0);
+					{
+						bChannelScanner = not ButtonPressed;
+						snprintf_P(buf, sizeof(buf), PSTR("Scan ") );
+						print_LCD_line(buf, 0, 0);
+
+						for (uint8_t i = 0; i < LCD_NUM_SPECIAL_CHARS; ++i)
+						{
+							lcd.write(i);
+						}
+						uint8_t b = 0;
+						for (uint8_t i = 0; i < LCD_NUM_SPECIAL_CHARS; ++i)
+						{
+							uint8_t ch[LCD_HEIGHT_SPECIAL_CHARS];
+							(void)memset(ch, 0, COUNT_OF(ch));
+							for (uint8_t mask = 1 << (LCD_WIDTH_SPECIAL_CHARS-1); mask > 0; mask >>= 1)
+							{
+								uint8_t v = channelScanBuckets[b++];
+//								uint8_t lvl = 256-(256/LCD_HEIGHT_SPECIAL_CHARS);
+								uint8_t lvl = 128;
+								for (uint8_t h = 0; h < LCD_HEIGHT_SPECIAL_CHARS; ++h)
+								{
+									if (v > lvl)
+									{
+										ch[h] |= mask;
+									}
+//									lvl -= 256/LCD_HEIGHT_SPECIAL_CHARS;
+									lvl >>= 1;
+								}
+							}
+							lcd.createChar(i, ch);
+						}
+					}
 					break;
 
 				default:
@@ -1033,6 +1070,8 @@ void menuPage(uint8_t param)
 		if (ButtonPressed)
 		{      
 			LCDML.FUNC_goBackToMenu();  // leave this function
+			// Restore special characters if they got overwritten
+			LCD_SetScrollbarChars();
 		}
 	} 
 }
