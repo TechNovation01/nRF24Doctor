@@ -231,6 +231,7 @@ static uint8_t iRf24ChannelScanCurrent = 0;
 #define CHANNEL_SCAN_NUM_BUCKETS (5*8)
 static uint8_t channelScanBuckets[CHANNEL_SCAN_NUM_BUCKETS];
 static bool bChannelScanner = false;
+#define SCANNEL_SCAN_MEASURE_TIME_US (5000)
 
 /*****************************************************************************/
 /******************************* ENCODER & BUTTON ****************************/
@@ -420,7 +421,7 @@ enum state {	STATE_IDLE,
 				// Regular measurement states
 				STATE_TX, STATE_RX, STATE_PROCESS_DATA, STATE_SLEEP,								
 				// Channel scanning Mode state
-				STATE_CH_SCAN, STATE_CH_SCAN_RESTART, STATE_CH_SCAN_RUNNING,
+				STATE_CH_SCAN, STATE_CH_SCAN_RESTART, STATE_CH_SCAN_MEASURE, STATE_CH_SCAN_WAIT,
 				// Gateway update states
 				STATE_START_GW_UPDATE, STATE_TX_GW_UPDATE, STATE_FAILED_GW_UPDATE,
 };
@@ -428,7 +429,8 @@ static state currState = STATE_IDLE;
 
 void statemachine()
 {
-	static unsigned long lTprevTransmit = 0;
+	static unsigned long timestamp = 0;	// reused inbetween some states
+
 	unsigned long iSetMsgDelay = (1000000L/iSetMsgRate);
 
 	switch (currState)
@@ -447,7 +449,7 @@ void statemachine()
 			else if (isTransportReady())
 			{
 				// Start of next measurement round
-				if ((micros() - lTprevTransmit) >= iSetMsgDelay){currState = STATE_TX;}	//Message Rate limiter
+				if ((micros() - timestamp) >= iSetMsgDelay){currState = STATE_TX;}	//Message Rate limiter
 			}
 			break;
 
@@ -459,8 +461,8 @@ void statemachine()
 				unsigned long lTcurTransmit = transmit(iPayloadSize);
 				
 				//Time rate of transmissions
-				iGetMsgRate = static_cast<uint8_t>((1e6/(lTcurTransmit-lTprevTransmit))+0.5);
-				lTprevTransmit = lTcurTransmit;
+				iGetMsgRate = static_cast<uint8_t>((1e6/(lTcurTransmit-timestamp))+0.5);
+				timestamp = lTcurTransmit;
 
 				if (bAdcDone) {				//Get TX Current Measurement Data...it should already have finished
 					TransmitCurrent_uA 	= uAperBit1*((float)iAdcSum/(float)(iStopStorageAfterNrAdcSamples-iStartStorageAfterNrAdcSamples+1));
@@ -543,36 +545,28 @@ void statemachine()
 
 		case STATE_CH_SCAN_RESTART:
 			iRf24ChannelScanCurrent = iRf24ChannelScanStart;
-			currState = STATE_CH_SCAN_RUNNING;
+			currState = STATE_CH_SCAN_MEASURE;
 			break;
 
-		case STATE_CH_SCAN_RUNNING:
+		case STATE_CH_SCAN_MEASURE:
+			// http://forum.diyembedded.com/viewtopic.php?f=4&t=809#p1047
+			RF24_ce(LOW);
+			RF24_setChannel(iRf24ChannelScanCurrent);
+			RF24_flushRX();
+			RF24_ce(HIGH);
+			delayMicroseconds(130+40);
+			timestamp = micros();
+			currState = STATE_CH_SCAN_WAIT;
+			break;
+
+		case STATE_CH_SCAN_WAIT:
+			if (not bChannelScanner)
 			{
-				if (iRf24ChannelScanCurrent > iRf24ChannelScanStop)
-				{
-					for (size_t i = 0; i < COUNT_OF(channelScanBuckets); ++i)
-					{
-						// uint8_t v = channelScanBuckets[i];
-						// v = CONSTRAIN_HI(v, 9);
-						// Sprint(char(v+'0'));
-						Sprint(channelScanBuckets[i]);
-						Sprint('\t');
-					}
-					Sprintln();
-					currState = STATE_CH_SCAN_RESTART;
-					break;
-				}
-				if (not bChannelScanner)
-				{
-					currState = STATE_IDLE;
-					break;
-				}
-				// http://forum.diyembedded.com/viewtopic.php?f=4&t=809#p1047
-				RF24_ce(LOW);
-				RF24_setChannel(iRf24ChannelScanCurrent);
-				RF24_flushRX();
-				RF24_ce(HIGH);
-				delayMicroseconds(130+40+1000);
+				currState = STATE_IDLE;
+				break;
+			}
+			if ((micros() - timestamp) >= SCANNEL_SCAN_MEASURE_TIME_US)
+			{
 				if (RF24_getReceivedPowerDetector())
 				{
 					// Determine bucket and increase vote
@@ -583,7 +577,19 @@ void statemachine()
 						++channelScanBuckets[bucket];
 					}
 				}
+				if (iRf24ChannelScanCurrent >= iRf24ChannelScanStop)
+				{
+					for (size_t i = 0; i < COUNT_OF(channelScanBuckets); ++i)
+					{
+						Sprint(channelScanBuckets[i]);
+						Sprint('\t');
+					}
+					Sprintln();
+					currState = STATE_CH_SCAN_RESTART;
+					break;
+				}
 				++iRf24ChannelScanCurrent;
+				currState = STATE_CH_SCAN_MEASURE;
 			}
 			break;
 
