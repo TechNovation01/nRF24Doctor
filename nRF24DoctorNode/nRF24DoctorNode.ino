@@ -1052,8 +1052,9 @@ void menuPage(uint8_t param)
 						snprintf_P(buf, sizeof(buf), PSTR("]%-3" PRIu8), iRf24ChannelScanStop );
 						print_LCD_line(buf, 0, 4+LCD_NUM_SPECIAL_CHARS);
 
+						// Calculate nRF channel indicated by pointer
 						const uint8_t ch = iRf24ChannelScanStart+((iRf24ChannelScanStop-iRf24ChannelScanStart)*iRf24ChannelScanColDisplayed+(LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS/2))/(LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS-1);
-						snprintf_P(buf, sizeof(buf), PSTR("CH %" PRIu8), ch );
+						snprintf_P(buf, sizeof(buf), PSTR("CH%" PRIu8 "  2.%03" PRIu16 "GHz"), ch, 400+ch );
 						print_LCD_line(buf, 1, 0);
 
 						uint8_t b = 0;
@@ -1076,7 +1077,7 @@ void menuPage(uint8_t param)
 //									lvl -= 256/LCD_HEIGHT_SPECIAL_CHARS;
 									lvl >>= 1;
 
-									// Draw XOR'ed triangle at the top of the chart to indicate column
+									// Draw XOR'ed pointer at the top of the chart to indicate column
 									if ( (h == 0) and ((b == (iRf24ChannelScanColDisplayed-1)) or (b == (iRf24ChannelScanColDisplayed+1))))
 									{
 										ch[h] ^= mask;
@@ -1090,7 +1091,7 @@ void menuPage(uint8_t param)
 							ch[LCD_HEIGHT_SPECIAL_CHARS-1] = 0xFF;
 							lcd.createChar(i, ch);
 						}
-						// Check range of triangle
+						// Check range of pointer
 						if (LCDML.BT_checkUp() and (iRf24ChannelScanColDisplayed < (LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS-1)))
 						{
 							++iRf24ChannelScanColDisplayed;
