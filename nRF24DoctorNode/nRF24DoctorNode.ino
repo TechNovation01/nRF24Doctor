@@ -225,13 +225,14 @@ const uint16_t restartDelayMs = 3000u;
 bool transportHwError = false;
 
 //**** RPD Channel Scanner ****
-static uint8_t iRf24ChannelScanStart = 0;
-static uint8_t iRf24ChannelScanStop  = NRF24_MAX_CHANNEL;
-static uint8_t iRf24ChannelScanCurrent = 0;
 #define LCD_NUM_SPECIAL_CHARS    (8)
 #define LCD_WIDTH_SPECIAL_CHARS  (5)
 #define LCD_HEIGHT_SPECIAL_CHARS (8)
 #define CHANNEL_SCAN_NUM_BUCKETS (LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS)
+static uint8_t iRf24ChannelScanStart = 0;
+static uint8_t iRf24ChannelScanStop  = NRF24_MAX_CHANNEL;
+static uint8_t iRf24ChannelScanCurrent = 0;
+static uint8_t iRf24ChannelScanColDisplayed = LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS/2;
 static uint8_t channelScanBuckets[CHANNEL_SCAN_NUM_BUCKETS];
 static bool bChannelScanner = false;
 #define SCANNEL_SCAN_MEASURE_TIME_US (5000)
@@ -962,8 +963,7 @@ void menuPage(uint8_t param)
 	{
 		LCD_clear();
 		char buf[LCD_COLS+1];
-		char buf1[LCD_COLS+1];
-		const bool ButtonPressed = LCDML.BT_checkAny(); // check if any button is pressed (enter, up, down, left, right)
+		bool exit = LCDML.BT_checkAny(); // check if any button is pressed (enter, up, down, left, right)
 
 		if (transportHwError)
 		{
@@ -1015,28 +1015,47 @@ void menuPage(uint8_t param)
 					break;
 
 				case PAGE_TXRXPOWER:
-					snprintf_P(buf, sizeof(buf), PSTR("Tx %s"), printBufCurrent(buf1,sizeof(buf1), TransmitCurrent_uA) );
-					print_LCD_line(buf, 0, 0);
-					snprintf_P(buf, sizeof(buf), PSTR("Rx %s"), printBufCurrent(buf1,sizeof(buf1), ReceiveCurrent_uA) );
-					print_LCD_line(buf, 1, 0);
+					{
+						char buf1[LCD_COLS+1];
+						snprintf_P(buf, sizeof(buf), PSTR("Tx %s"), printBufCurrent(buf1,sizeof(buf1), TransmitCurrent_uA) );
+						print_LCD_line(buf, 0, 0);
+						snprintf_P(buf, sizeof(buf), PSTR("Rx %s"), printBufCurrent(buf1,sizeof(buf1), ReceiveCurrent_uA) );
+						print_LCD_line(buf, 1, 0);
+					}
 					break;
 
 				case PAGE_SLEEPPOWER:
-					currState = STATE_SLEEP;
-					snprintf_P(buf, sizeof(buf), PSTR("Sleep %s"), printBufCurrent(buf1,sizeof(buf1), SleepCurrent_uA) );
-					print_LCD_line(buf, 0, 0);
+					{
+						currState = STATE_SLEEP;
+						char buf1[LCD_COLS+1];
+						snprintf_P(buf, sizeof(buf), PSTR("Sleep %s"), printBufCurrent(buf1,sizeof(buf1), SleepCurrent_uA) );
+						print_LCD_line(buf, 0, 0);
+					}
 					break;
 
 				case PAGE_SCANNER:
 					{
-						bChannelScanner = not ButtonPressed;
-						snprintf_P(buf, sizeof(buf), PSTR("Scan ") );
+						// SCanner only exits on button press, as rotation is used to navigate channels.
+						exit = LCDML.BT_checkEnter();
+
+						bChannelScanner = not exit;
+
+						iRf24ChannelScanColDisplayed = constrain(iRf24ChannelScanColDisplayed, iRf24ChannelScanStart, iRf24ChannelScanStop);
+
+						snprintf_P(buf, sizeof(buf), PSTR("%3" PRIu8 "["), iRf24ChannelScanStart );
 						print_LCD_line(buf, 0, 0);
 
 						for (uint8_t i = 0; i < LCD_NUM_SPECIAL_CHARS; ++i)
 						{
 							lcd.write(i);
 						}
+						snprintf_P(buf, sizeof(buf), PSTR("]%-3" PRIu8), iRf24ChannelScanStop );
+						print_LCD_line(buf, 0, 4+LCD_NUM_SPECIAL_CHARS);
+
+						const uint8_t ch = iRf24ChannelScanStart+((iRf24ChannelScanStop-iRf24ChannelScanStart)*iRf24ChannelScanColDisplayed+(LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS/2))/(LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS-1);
+						snprintf_P(buf, sizeof(buf), PSTR("CH %" PRIu8), ch );
+						print_LCD_line(buf, 1, 0);
+
 						uint8_t b = 0;
 						for (uint8_t i = 0; i < LCD_NUM_SPECIAL_CHARS; ++i)
 						{
@@ -1044,10 +1063,11 @@ void menuPage(uint8_t param)
 							(void)memset(ch, 0, COUNT_OF(ch));
 							for (uint8_t mask = 1 << (LCD_WIDTH_SPECIAL_CHARS-1); mask > 0; mask >>= 1)
 							{
-								uint8_t v = channelScanBuckets[b++];
+								uint8_t v = channelScanBuckets[b];
 //								uint8_t lvl = 256-(256/LCD_HEIGHT_SPECIAL_CHARS);
-								uint8_t lvl = 128;
-								for (uint8_t h = 0; h < LCD_HEIGHT_SPECIAL_CHARS; ++h)
+								const uint8_t heightPix = LCD_HEIGHT_SPECIAL_CHARS-1;
+								uint8_t lvl = 1<<heightPix;
+								for (uint8_t h = 0; h < heightPix; ++h)
 								{
 									if (v > lvl)
 									{
@@ -1055,9 +1075,29 @@ void menuPage(uint8_t param)
 									}
 //									lvl -= 256/LCD_HEIGHT_SPECIAL_CHARS;
 									lvl >>= 1;
+
+									// Draw XOR'ed triangle at the top of the chart to indicate column
+									if ( (h == 0) and ((b == (iRf24ChannelScanColDisplayed-1)) or (b == (iRf24ChannelScanColDisplayed+1))))
+									{
+										ch[h] ^= mask;
+									} else if ((h <= 1) and (b == iRf24ChannelScanColDisplayed))
+									{
+										ch[h] ^= mask;
+									}
 								}
+								++b;
 							}
+							ch[LCD_HEIGHT_SPECIAL_CHARS-1] = 0xFF;
 							lcd.createChar(i, ch);
+						}
+						// Check range of triangle
+						if (LCDML.BT_checkUp() and (iRf24ChannelScanColDisplayed < (LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS-1)))
+						{
+							++iRf24ChannelScanColDisplayed;
+						}
+						if (LCDML.BT_checkDown() and (iRf24ChannelScanColDisplayed > 0))
+						{
+							--iRf24ChannelScanColDisplayed;
 						}
 					}
 					break;
@@ -1067,7 +1107,7 @@ void menuPage(uint8_t param)
 			}
 		}
 
-		if (ButtonPressed)
+		if (exit)
 		{      
 			LCDML.FUNC_goBackToMenu();  // leave this function
 			// Restore special characters if they got overwritten
