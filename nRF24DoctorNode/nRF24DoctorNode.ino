@@ -1040,7 +1040,7 @@ void menuPage(uint8_t param)
 
 						bChannelScanner = not exit;
 
-						iRf24ChannelScanColDisplayed = constrain(iRf24ChannelScanColDisplayed, iRf24ChannelScanStart, iRf24ChannelScanStop);
+						iRf24ChannelScanColDisplayed = constrain(iRf24ChannelScanColDisplayed, 0, (LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS-1));
 
 						snprintf_P(buf, sizeof(buf), PSTR("%3" PRIu8 "["), iRf24ChannelScanStart );
 						print_LCD_line(buf, 0, 0);
