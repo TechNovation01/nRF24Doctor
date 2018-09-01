@@ -561,7 +561,8 @@ void statemachine()
 		case STATE_CH_SCAN_WAIT:
 			if (not bChannelScanner)
 			{
-				// Requested to stop scanner
+				// Requested to stop scanner. Restore channel.
+				RF24_setChannel(iRf24Channel);
 				currState = STATE_IDLE;
 				break;
 			}
