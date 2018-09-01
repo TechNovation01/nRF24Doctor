@@ -103,9 +103,9 @@ LCDML_addAdvanced (3  , LCDML_0         , 4    , NULL              , "Counters  
 LCDML_addAdvanced (4  , LCDML_0         , 5    , NULL              , "TxRx Power   >"  , menuPage           , PAGE_TXRXPOWER   , _LCDML_TYPE_default);
 LCDML_addAdvanced (5  , LCDML_0         , 6    , NULL              , "Sleep Power  >"  , menuPage           , PAGE_SLEEPPOWER  , _LCDML_TYPE_default);
 LCDML_add         (6  , LCDML_0         , 7                        , "Channel Scan >"  , NULL);
-LCDML_addAdvanced (7  , LCDML_0_7     	, 1    , NULL              , ""                , menuCfgScanChStart	, 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (8  , LCDML_0_7     	, 2    , NULL              , ""                , menuCfgScanChStop	, 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (9  , LCDML_0_7     	, 3    , NULL              , "Run Scan     >"  , menuPage           , PAGE_SCANNER     , _LCDML_TYPE_default);
+LCDML_addAdvanced (7  , LCDML_0_7     	, 1    , NULL              , "Run Scan     >"  , menuPage           , PAGE_SCANNER     , _LCDML_TYPE_default);
+LCDML_addAdvanced (8  , LCDML_0_7     	, 2    , NULL              , ""                , menuCfgScanChStart	, 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (9  , LCDML_0_7     	, 3    , NULL              , ""                , menuCfgScanChStop	, 0                , _LCDML_TYPE_dynParam);
 LCDML_add 		  (10 , LCDML_0_7       , 4                        , "Back         <"  , menuBack);
 LCDML_add         (11 , LCDML_0         , 8                        , "Settings     >"  , NULL);
 LCDML_add         (12 , LCDML_0_8       , 1                        , "Radio        >"  , NULL);
