@@ -235,7 +235,7 @@ static uint8_t iRf24ChannelScanCurrent = 0;
 static uint8_t iRf24ChannelScanColDisplayed = LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS/2;
 static uint8_t channelScanBuckets[CHANNEL_SCAN_NUM_BUCKETS];
 static bool bChannelScanner = false;
-#define SCANNEL_SCAN_MEASURE_TIME_US (5000)
+#define SCANNEL_SCAN_MEASURE_TIME_US (1000)
 
 /*****************************************************************************/
 /******************************* ENCODER & BUTTON ****************************/
