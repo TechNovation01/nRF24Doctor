@@ -2,6 +2,7 @@
 
 #define COUNT_OF(x) 			((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
 #define CONSTRAIN_HI(amt,high)	((amt)>(high)?(high):(amt))
+#define CONSTRAIN_LO(amt,low)	((amt)<(low)?(low):(amt))
 
 #define BIT_SET_ARRAY(arr,bit)  (arr[bit>>8] |= 1u<<(bit))
 #define BIT_CLR_ARRAY(arr,bit)  (arr[bit>>8] &= ~(1u<<(bit)))

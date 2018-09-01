@@ -37,7 +37,7 @@
 */
 
 // Enable debug prints to serial monitor
-#define MY_DEBUG
+//#define MY_DEBUG
 //#define MY_DEBUG_VERBOSE_RF24
 
 //**** DEBUG *****
@@ -99,13 +99,13 @@
 
 static Bounce buttonRestoreDefaults = Bounce(); 
 
-#define CHILD_ID_UPDATE_GATEWAY 250
-
+#define CHILD_ID_UPDATE_GATEWAY 	(1)
+#define CHILD_ID_CH_SCAN			(2)
 void before()
 {
 	// Load radio settings from eeprom
 	loadEeprom();
-	logRadioSettings();
+	logRadioSettings(1);
 }
 
 void setup()
@@ -123,7 +123,7 @@ void loop()
 	if ((nowMs - lastLogTimeMs) > DELAY_BETWEEN_RADIO_SETTINGS_PRINT_MS)
 	{
 		lastLogTimeMs = nowMs;
-		logRadioSettings();
+		logRadioSettings(1);
 	}
 
 	buttonRestoreDefaults.update();
@@ -149,5 +149,18 @@ void receive( const MyMessage &message )
 		saveEeprom();
 		Sprintln(F("Resetting..."));
 		reset();
+	}
+
+	if (message.type == V_CUSTOM && message.sensor == CHILD_ID_CH_SCAN)
+	{
+		Sprintln(F("Received new Channel Scan Results"));
+		logRadioSettings(0);
+		deserializeChScanResults( message );
+
+		Sprint(F("\t MsgTotal:"));Sprint(iMsgTotal);
+		Sprint(F("\t MsgFailed:"));Sprint(iMsgFailed);
+		Sprint(F("\t MsgNack:"));Sprint(iMsgNack);
+		Sprint(F("\t MsgWithArc:"));Sprintln(iNrOfMsgWithArc);
+		
 	}
 }

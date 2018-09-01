@@ -129,8 +129,6 @@ LCDML_add         (29 , LCDML_0_8       , 4                        , "Reset node
 LCDML_add         (30 , LCDML_0_8       , 5                        , "Back         <"  , menuBack);
 #define _LCDML_DISP_cnt    30   // Should equal last id in menu
 
-
-
 LCDML_createMenu(_LCDML_DISP_cnt);
 
 # if(_LCDML_DISP_rows > _LCDML_DISP_cfg_max_rows)
@@ -146,8 +144,10 @@ static Encoder encoder(ENCODER_A_PIN, ENCODER_B_PIN);
 static Bounce button = Bounce(); 
 
 //**** MySensors Messages ****
-#define CHILD_ID_COUNTER 0
-#define CHILD_ID_UPDATE_GATEWAY 0
+#define CHILD_ID_COUNTER 			(0)
+#define CHILD_ID_UPDATE_GATEWAY 	(1)
+#define CHILD_ID_CH_SCAN 			(2)
+
 MyMessage MsgCounter(CHILD_ID_COUNTER, V_CUSTOM);   				//Send Message Counter value
 
 // Actual data exchanged in a message 
@@ -173,6 +173,7 @@ uint8_t bArrayNAckMessages[(iMaxNumberOfMessages+7)>>3];			// Array for moving a
 uint16_t iNrFailedMessages = 0;            							// total of Failed Messages
 uint16_t iNrNAckMessages = 0;              							// total of Not Acknowledged Messages
 uint16_t iMessageCounter = 0;
+uint8_t iNrOfMsgWithArc = 0;
 
 //**** Timing ****
 const uint8_t iNrTimeDelays = 10;
@@ -375,7 +376,7 @@ void before() {						//Initialization before the MySensors library starts up
 
 	// Load radio settings from eeprom
 	loadEeprom();
-	logRadioSettings();
+	logRadioSettings(1);
 }
 
 void setup() {
@@ -396,6 +397,7 @@ void setup() {
 	//**** MENU *****
 	LCDML_setup(_LCDML_DISP_cnt);
 	LCDML.SCREEN_disable();
+	if (bChannelScanState){LCDML.OTHER_jumpToID(11, 0);} 	//Jump to Channel Scanning Page @ Startup
 }
 
 void presentation() {
@@ -489,7 +491,7 @@ void statemachine()
 			getMeanAndMaxFromArray(&iMeanDelayFirstHop_ms,&iMaxDelayFirstHop_ms,lTimeDelayBuffer_FirstHop_us,iNrTimeDelays);
 			getMeanAndMaxFromArray(&iMeanDelayDestination_ms,&iMaxDelayDestination_ms,lTimeDelayBuffer_Destination_us,iNrTimeDelays);
 			
-			currState = STATE_IDLE;
+			currState = STATE_CH_SCAN;
 			break;
 
 		case STATE_SLEEP:
@@ -596,7 +598,7 @@ void statemachine()
 			currState = STATE_CH_SCAN_MEASURE;
 			break;
 
-		case STATE_START_GW_UPDATE:
+    case STATE_START_GW_UPDATE:
 			updateGatewayAttemptsRemaining = updateGatewayNumAttempts;
 			currState = STATE_TX_GW_UPDATE;
 			break;
@@ -607,7 +609,6 @@ void statemachine()
 				--updateGatewayAttemptsRemaining;
 				MyMessage MsgUpdateGateway(CHILD_ID_UPDATE_GATEWAY, V_CUSTOM);
 				MsgUpdateGateway.setDestination(0);
-				MsgUpdateGateway.setSensor(250);
 				serializeGwSettings( MsgUpdateGateway );
 
 				// Transmit message with software ack request (returned in "receive function")
@@ -745,7 +746,24 @@ void MY_RF24_startListening()
 // 	// timing
 // 	delayMicroseconds(100);
 // }
+/*****************************************************************************/
+/*************************** CHANNEL SCAN FUNCTIONS **************************/
+/*****************************************************************************/
+void print_scan_channel_results(){
+	logRadioSettings(0);
+	Serial.print(F("\t MsgTotal:"));Serial.print(iMessageCounter);
+	Serial.print(F("\t MsgFailed:"));Serial.print(iNrFailedMessages);
+	Serial.print(F("\t MsgNack:"));Serial.print(CONSTRAIN_LO(iNrNAckMessages,1)-1); //Apparently the last ack is not yet in when printing the results.
+	Serial.print(F("\t MsgWithArc:"));Serial.println(iNrOfMsgWithArc);
+}
 
+void send_scan_channel_results_to_gateway(uint8_t retries){
+	MyMessage MsgChScanResults(CHILD_ID_CH_SCAN, V_CUSTOM);
+	MsgChScanResults.setDestination(0);
+	serializeChScanResults( MsgChScanResults, static_cast<uint8_t>(CONSTRAIN_HI(iMessageCounter,255)), static_cast<uint8_t>(CONSTRAIN_HI(iNrFailedMessages,255)), static_cast<uint8_t>(CONSTRAIN_HI(CONSTRAIN_LO(iNrNAckMessages,1)-1,255)),CONSTRAIN_HI(iNrOfMsgWithArc,255));
+	uint8_t retriesRemaining = retries;
+	while ( send(MsgChScanResults, true)==false && retriesRemaining>0){retriesRemaining--;}
+}
 /********************************************************************************/
 /************************* MYSENSORS INDICATION CALLBACK ************************/
 /********************************************************************************/
@@ -1412,4 +1430,14 @@ void menuBack(__attribute__((unused)) uint8_t param)
 		// Go one level up
 		LCDML.FUNC_goBackToMenu(1);
 	} 
+}
+
+void menuStopScan(__attribute__((unused)) uint8_t param)
+{
+	if (LCDML.FUNC_setup())
+	{
+		bChannelScanState = false;
+		saveState(EEPROM_CH_SCAN_MODE_STATE, bChannelScanState);
+		LCDML.FUNC_goBackToMenu(1);
+	}
 }
