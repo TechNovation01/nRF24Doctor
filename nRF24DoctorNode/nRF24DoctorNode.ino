@@ -168,8 +168,8 @@ uint8_t iArcCntMax = 0;
 
 //**** Monitoring Constants&Variables ****
 const int iMaxNumberOfMessages = 100 ;           					// Number of Messages Used for MA calculation
-boolean bArrayFailedMessages[iMaxNumberOfMessages] = { 0 };     	// Array for moving average storage
-boolean bArrayNAckMessages[iMaxNumberOfMessages] = { 0 };			// Array for moving average storage
+uint8_t bArrayFailedMessages[(iMaxNumberOfMessages+7)>>3];     		// Array for moving average storage
+uint8_t bArrayNAckMessages[(iMaxNumberOfMessages+7)>>3];			// Array for moving average storage
 uint16_t iNrFailedMessages = 0;            							// total of Failed Messages
 uint16_t iNrNAckMessages = 0;              							// total of Not Acknowledged Messages
 uint16_t iMessageCounter = 0;
@@ -217,8 +217,8 @@ bool bUpdateGateway = false;
 uint8_t updateGatewayAttemptsRemaining;
 const uint8_t updateGatewayNumAttempts = 10;
 
-const uint8_t iNrGatwayRetryOptions = 3;
-const char *pcGatewayRetryNames[iNrGatwayRetryOptions] = { "SKIP GATEWAY", "RETRY GATEWAY" , "CANCEL ALL"};
+//const uint8_t iNrGatwayRetryOptions = 3;
+//const char *pcGatewayRetryNames[iNrGatwayRetryOptions] = { "SKIP GATEWAY", "RETRY GATEWAY" , "CANCEL ALL"};
 
 const uint16_t restartDelayMs = 3000u;
 
@@ -645,7 +645,7 @@ void receive(const MyMessage &message) {
 		uint16_t iNewMessage = ((uint16_t)ReceivedData.m_dynMessage[0] << 8)|((uint16_t)ReceivedData.m_dynMessage[1]); //2 Byte Counter
 
 		uint16_t iIndexInArray = iNewMessage % iMaxNumberOfMessages;
-		bArrayNAckMessages[iIndexInArray] = 0; 			// set corresponding flag to received.
+		BIT_CLR_ARRAY(bArrayNAckMessages, iIndexInArray); 			// set corresponding flag to received.
 		
 		// Check Message (Round trip) Delay
 		uint8_t iIndexInTimeArray = IndexOfValueInArray(iNewMessage, iMessageIndexBuffer, iNrTimeDelays); //Look-up if message is present in MessageIndexBuffer for delay calculation
@@ -671,7 +671,7 @@ unsigned long transmit(size_t iPayloadLength) {
 	iIndexInArrayFailedMessages = iMessageCounter % iMaxNumberOfMessages;
 	iIndexInArrayTimeMessages 	= iMessageCounter % iNrTimeDelays;
 
-	bArrayNAckMessages[iIndexInArrayFailedMessages] = 1; 			// set corresponding flag to "Not Received Yet"
+	BIT_SET_ARRAY(bArrayNAckMessages, iIndexInArrayFailedMessages);		// set corresponding flag to "Not Received Yet"
 
 	// Prepare time stamp logging for transmit
 	lTimeDelayBuffer_Destination_us[iIndexInArrayTimeMessages] = 0; 		// Clear Buffer value, new value will be written when message is received
@@ -690,13 +690,13 @@ unsigned long transmit(size_t iPayloadLength) {
 	if (!success) {
 		// Keep LED on to indicate failure
 		lTimeDelayBuffer_FirstHop_us[iIndexInArrayTimeMessages] = 0;	//It failed, so I can't use it to determine a First Hop Delay (i.e. it is "infinite" delay as it failed)
-		bArrayFailedMessages[iIndexInArrayFailedMessages] = true;	//Log it as a failed message (for rolling average)
+		BIT_SET_ARRAY(bArrayFailedMessages, iIndexInArrayFailedMessages);	//Log it as a failed message (for rolling average)
 		iNrFailedMessages++ ;
 	}
 	else{
 		lTimeDelayBuffer_FirstHop_us[iIndexInArrayTimeMessages] = micros() - lTimeOfTransmit_us[iIndexInArrayTimeMessages];	//Log First Hop Delay in buffer
 //		unsigned long temptime = lTimeDelayBuffer_FirstHop_us[iIndexInArrayTimeMessages];
-		bArrayFailedMessages[iIndexInArrayFailedMessages] = false;	//Log it as a not-failed = succesful message (for rolling average)
+		BIT_CLR_ARRAY(bArrayFailedMessages, iIndexInArrayFailedMessages);	//Log it as a not-failed = succesful message (for rolling average)
 #ifdef LED_PIN
 		// LED off to indicate success
 		digitalWrite(LED_PIN, LOW);
@@ -787,18 +787,25 @@ uint8_t IndexOfValueInArray(uint16_t val, uint16_t *array, uint8_t size){
 	return 255;	//Not Found
 }
 
-int GetNrOfTrueValuesInArray(boolean countArray[], int size) {
-	// Calculate number of TRUE values in array
-	int Counter = 0 ;
-	for (int i = 0 ; i < size ; i++) {Counter += countArray[i];}
-	return Counter;
+uint8_t GetNumBitsSetInArray(uint8_t arr[], const uint8_t sizeBytes)
+{
+	uint8_t count = 0;
+	for (uint8_t i = 0; i < sizeBytes; ++i)
+	{
+		uint8_t v = arr[i];
+		// Counting bits set, Brian Kernighan's way
+		// http://graphics.stanford.edu/~seander/bithacks.html#CountBitsSetKernighan
+		for (; v; ++count)
+		{
+			v &= v - 1; // clear the least significant bit set
+		}
+	}
+	return count;
 }
 
 void ClearStorageAndCounters() {
-	for (int n = 0; n < iMaxNumberOfMessages; n++){
-		bArrayFailedMessages[n] = 0;
-		bArrayNAckMessages[n] = 0;
-	}
+	(void)memset(bArrayFailedMessages, 0, COUNT_OF(bArrayFailedMessages));
+	(void)memset(bArrayNAckMessages, 0, COUNT_OF(bArrayNAckMessages));
 	iNrNAckMessages = iMessageCounter = iNrFailedMessages = 0;
 }
 
@@ -1024,9 +1031,9 @@ void menuPage(uint8_t param)
 			switch(page(param))
 			{
 				case PAGE_STATISTICS:
-					snprintf_P(buf, sizeof(buf), PSTR("P%-3dFAIL%4d%3d%%"), MY_PARENT_NODE_ID, iNrFailedMessages, GetNrOfTrueValuesInArray(bArrayFailedMessages, iMaxNumberOfMessages));
+					snprintf_P(buf, sizeof(buf), PSTR("P%-3dFAIL%4d%3d%%"), MY_PARENT_NODE_ID, iNrFailedMessages, GetNumBitsSetInArray(bArrayFailedMessages, COUNT_OF(bArrayFailedMessages)));
 					print_LCD_line(buf, 0, 0);
-					snprintf_P(buf, sizeof(buf), PSTR("D%-3dNACK%4d%3d%%"), iDestinationNode , iNrNAckMessages, GetNrOfTrueValuesInArray(bArrayNAckMessages, iMaxNumberOfMessages));
+					snprintf_P(buf, sizeof(buf), PSTR("D%-3dNACK%4d%3d%%"), iDestinationNode , iNrNAckMessages, GetNumBitsSetInArray(bArrayNAckMessages, COUNT_OF(bArrayNAckMessages)));
 					print_LCD_line(buf, 1, 0);
 					break;
 
