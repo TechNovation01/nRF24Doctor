@@ -233,6 +233,7 @@ static uint8_t iRf24ChannelScanStart = 0;
 static uint8_t iRf24ChannelScanStop  = NRF24_MAX_CHANNEL;
 static uint8_t iRf24ChannelScanCurrent = 0;
 static uint8_t iRf24ChannelScanColDisplayed = LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS/2;
+#define CHANNEL_SCAN_BUCKET_MAX_VAL (255)
 static uint8_t channelScanBuckets[CHANNEL_SCAN_NUM_BUCKETS];
 static bool bChannelScanner = false;
 #define SCANNEL_SCAN_MEASURE_TIME_US (1000)
@@ -574,7 +575,7 @@ void statemachine()
 				// Determine bucket and increase vote
 				uint8_t bucket = (iRf24ChannelScanCurrent-iRf24ChannelScanStart) * CHANNEL_SCAN_NUM_BUCKETS / (iRf24ChannelScanStop-iRf24ChannelScanStart+1);
 				bucket = CONSTRAIN_HI(bucket, COUNT_OF(channelScanBuckets)-1);	// just to be sure...
-				if (channelScanBuckets[bucket] < 255)
+				if (channelScanBuckets[bucket] < CHANNEL_SCAN_BUCKET_MAX_VAL)
 				{
 					++channelScanBuckets[bucket];
 				}
@@ -1076,9 +1077,8 @@ void menuPage(uint8_t param)
 							for (uint8_t mask = 1 << (LCD_WIDTH_SPECIAL_CHARS-1); mask > 0; mask >>= 1)
 							{
 								uint8_t v = channelScanBuckets[b];
-								const uint8_t heightPix = LCD_HEIGHT_SPECIAL_CHARS-1;
-								uint8_t lvl = 1<<heightPix;
-								for (uint8_t h = 0; h < heightPix; ++h)
+								uint8_t lvl = CHANNEL_SCAN_BUCKET_MAX_VAL/2;
+								for (uint8_t h = 0; h < LCD_HEIGHT_SPECIAL_CHARS-1; ++h)
 								{
 									if (v >= lvl)
 									{
