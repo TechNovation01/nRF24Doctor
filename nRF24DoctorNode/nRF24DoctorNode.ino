@@ -581,12 +581,13 @@ void statemachine()
 			}
 			if (iRf24ChannelScanCurrent >= iRf24ChannelScanStop)
 			{
-				for (size_t i = 0; i < COUNT_OF(channelScanBuckets); ++i)
+/*				for (size_t i = 0; i < COUNT_OF(channelScanBuckets); ++i)
 				{
 					Sprint(channelScanBuckets[i]);
 					Sprint('\t');
 				}
 				Sprintln();
+*/
 				currState = STATE_CH_SCAN_RESTART;
 				break;
 			}
