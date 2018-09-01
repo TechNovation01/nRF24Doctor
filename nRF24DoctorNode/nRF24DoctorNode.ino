@@ -228,13 +228,12 @@ bool transportHwError = false;
 #define LCD_NUM_SPECIAL_CHARS    (8)
 #define LCD_WIDTH_SPECIAL_CHARS  (5)
 #define LCD_HEIGHT_SPECIAL_CHARS (8)
-#define CHANNEL_SCAN_NUM_BUCKETS (LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS)
 static uint8_t iRf24ChannelScanStart = 0;
 static uint8_t iRf24ChannelScanStop  = NRF24_MAX_CHANNEL;
 static uint8_t iRf24ChannelScanCurrent = 0;
 static uint8_t iRf24ChannelScanColDisplayed = LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS/2;
 #define CHANNEL_SCAN_BUCKET_MAX_VAL (255)
-static uint8_t channelScanBuckets[CHANNEL_SCAN_NUM_BUCKETS];
+static uint8_t channelScanBuckets[LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS];
 static bool bChannelScanner = false;
 #define SCANNEL_SCAN_MEASURE_TIME_US (1000)
 
@@ -573,7 +572,7 @@ void statemachine()
 			if (RF24_getReceivedPowerDetector())
 			{
 				// Determine bucket and increase vote
-				uint8_t bucket = (iRf24ChannelScanCurrent-iRf24ChannelScanStart) * CHANNEL_SCAN_NUM_BUCKETS / (iRf24ChannelScanStop-iRf24ChannelScanStart+1);
+				uint8_t bucket = (iRf24ChannelScanCurrent-iRf24ChannelScanStart) * COUNT_OF(channelScanBuckets) / (iRf24ChannelScanStop-iRf24ChannelScanStart+1);
 				bucket = CONSTRAIN_HI(bucket, COUNT_OF(channelScanBuckets)-1);	// just to be sure...
 				if (channelScanBuckets[bucket] < CHANNEL_SCAN_BUCKET_MAX_VAL)
 				{
@@ -956,33 +955,42 @@ char* printBufCurrent(char *buf, int size, float curr)
 
 void drawScannerChart( const uint8_t pointerCol )
 {
-	uint8_t b = 0;
+	const uint8_t numChannels = (iRf24ChannelScanStop - iRf24ChannelScanStart + 1);
+	// Channel and step for each column (in fixed point 8.8)
+	const uint16_t channelStep = (numChannels << 8) / COUNT_OF(channelScanBuckets);
+	uint16_t channel = iRf24ChannelScanStart << 8;
+
+	uint8_t col = 0;
 	for (uint8_t i = 0; i < LCD_NUM_SPECIAL_CHARS; ++i)
 	{
-		uint8_t ch[LCD_HEIGHT_SPECIAL_CHARS];
-		(void)memset(ch, 0, COUNT_OF(ch));
+		uint8_t character[LCD_HEIGHT_SPECIAL_CHARS];
+		(void)memset(character, 0, COUNT_OF(character));
 		for (uint8_t mask = 1 << (LCD_WIDTH_SPECIAL_CHARS-1); mask > 0; mask >>= 1)
 		{
-			uint8_t v = channelScanBuckets[b];
+
+			uint8_t bucket = ((channel>>8) - iRf24ChannelScanStart) * COUNT_OF(channelScanBuckets) / numChannels;
+			bucket = CONSTRAIN_HI(bucket, COUNT_OF(channelScanBuckets)-1);	// just to be sure...
+			uint8_t v = channelScanBuckets[bucket];
 			uint8_t lvl = CHANNEL_SCAN_BUCKET_MAX_VAL/2;
 			for (uint8_t h = 0; h < LCD_HEIGHT_SPECIAL_CHARS-1; ++h)
 			{
 				if (v >= lvl)
 				{
-					ch[h] |= mask;
+					character[h] |= mask;
 				}
 				lvl >>= 1;
 
 				// Draw XOR'ed pointer at the top of the chart to indicate column
-				if ((0 == h) and (b == pointerCol))
+				if ((0 == h) and (col == pointerCol))
 				{
-					ch[h] ^= mask;
+					character[h] ^= mask;
 				}
 			}
-			++b;
+			channel += channelStep;
+			++col;
 		}
-		ch[LCD_HEIGHT_SPECIAL_CHARS-1] = 0xFF;
-		lcd.createChar(i, ch);
+		character[LCD_HEIGHT_SPECIAL_CHARS-1] = 0xFF;
+		lcd.createChar(i, character);
 	}
 }
 
