@@ -954,6 +954,38 @@ char* printBufCurrent(char *buf, int size, float curr)
 	return buf;
 }
 
+void drawScannerChart( const uint8_t pointerCol )
+{
+	uint8_t b = 0;
+	for (uint8_t i = 0; i < LCD_NUM_SPECIAL_CHARS; ++i)
+	{
+		uint8_t ch[LCD_HEIGHT_SPECIAL_CHARS];
+		(void)memset(ch, 0, COUNT_OF(ch));
+		for (uint8_t mask = 1 << (LCD_WIDTH_SPECIAL_CHARS-1); mask > 0; mask >>= 1)
+		{
+			uint8_t v = channelScanBuckets[b];
+			uint8_t lvl = CHANNEL_SCAN_BUCKET_MAX_VAL/2;
+			for (uint8_t h = 0; h < LCD_HEIGHT_SPECIAL_CHARS-1; ++h)
+			{
+				if (v >= lvl)
+				{
+					ch[h] |= mask;
+				}
+				lvl >>= 1;
+
+				// Draw XOR'ed pointer at the top of the chart to indicate column
+				if ((0 == h) and (b == pointerCol))
+				{
+					ch[h] ^= mask;
+				}
+			}
+			++b;
+		}
+		ch[LCD_HEIGHT_SPECIAL_CHARS-1] = 0xFF;
+		lcd.createChar(i, ch);
+	}
+}
+
 void menuPage(uint8_t param)
 {
 	if (LCDML.FUNC_setup())
@@ -1040,13 +1072,23 @@ void menuPage(uint8_t param)
 
 				case PAGE_SCANNER:
 					{
-						// SCanner only exits on button press, as rotation is used to navigate channels.
+						// Scanner only exits on button press, as rotation is used to navigate channels.
 						exit = LCDML.BT_checkEnter();
 
 						bChannelScanner = not exit;
 
+						// Update position of pointer when encoder is rotated
+						if (LCDML.BT_checkUp())
+						{
+							++iRf24ChannelScanColDisplayed;
+						}
+						if (LCDML.BT_checkDown() and (iRf24ChannelScanColDisplayed > 0))
+						{
+							--iRf24ChannelScanColDisplayed;
+						}
 						iRf24ChannelScanColDisplayed = CONSTRAIN_HI(iRf24ChannelScanColDisplayed, (LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS-1));
 
+						// -- 1st line of display
 						snprintf_P(buf, sizeof(buf), PSTR("%3" PRIu8 "["), iRf24ChannelScanStart );
 						print_LCD_line(buf, 0, 0);
 
@@ -1057,6 +1099,7 @@ void menuPage(uint8_t param)
 						snprintf_P(buf, sizeof(buf), PSTR("]%-3" PRIu8), iRf24ChannelScanStop );
 						print_LCD_line(buf, 0, 4+LCD_NUM_SPECIAL_CHARS);
 
+						// -- 2nd line of display
 						// Calculate nRF channel indicated by pointer
 						const uint8_t chan = iRf24ChannelScanStart+((iRf24ChannelScanStop-iRf24ChannelScanStart)*iRf24ChannelScanColDisplayed+(LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS/2))/(LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS-1);
 						snprintf_P(buf, sizeof(buf), PSTR("CH%-03" PRIu8 " 2.%03" PRIu16 "G"), chan, 400+chan );
@@ -1069,43 +1112,8 @@ void menuPage(uint8_t param)
 							print_LCD_line(buf, 1, LCD_COLS-3);
 						}
 
-						uint8_t b = 0;
-						for (uint8_t i = 0; i < LCD_NUM_SPECIAL_CHARS; ++i)
-						{
-							uint8_t ch[LCD_HEIGHT_SPECIAL_CHARS];
-							(void)memset(ch, 0, COUNT_OF(ch));
-							for (uint8_t mask = 1 << (LCD_WIDTH_SPECIAL_CHARS-1); mask > 0; mask >>= 1)
-							{
-								uint8_t v = channelScanBuckets[b];
-								uint8_t lvl = CHANNEL_SCAN_BUCKET_MAX_VAL/2;
-								for (uint8_t h = 0; h < LCD_HEIGHT_SPECIAL_CHARS-1; ++h)
-								{
-									if (v >= lvl)
-									{
-										ch[h] |= mask;
-									}
-									lvl >>= 1;
-
-									// Draw XOR'ed pointer at the top of the chart to indicate column
-									if ((0 == h) and (b == iRf24ChannelScanColDisplayed))
-									{
-										ch[h] ^= mask;
-									}
-								}
-								++b;
-							}
-							ch[LCD_HEIGHT_SPECIAL_CHARS-1] = 0xFF;
-							lcd.createChar(i, ch);
-						}
-						// Check range of pointer
-						if (LCDML.BT_checkUp() and (iRf24ChannelScanColDisplayed < (LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS-1)))
-						{
-							++iRf24ChannelScanColDisplayed;
-						}
-						if (LCDML.BT_checkDown() and (iRf24ChannelScanColDisplayed > 0))
-						{
-							--iRf24ChannelScanColDisplayed;
-						}
+						// -- Program the special characters to display the chart
+						drawScannerChart( iRf24ChannelScanColDisplayed );
 					}
 					break;
 
