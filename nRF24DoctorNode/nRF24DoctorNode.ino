@@ -1073,16 +1073,14 @@ void menuPage(uint8_t param)
 							for (uint8_t mask = 1 << (LCD_WIDTH_SPECIAL_CHARS-1); mask > 0; mask >>= 1)
 							{
 								uint8_t v = channelScanBuckets[b];
-//								uint8_t lvl = 256-(256/LCD_HEIGHT_SPECIAL_CHARS);
 								const uint8_t heightPix = LCD_HEIGHT_SPECIAL_CHARS-1;
 								uint8_t lvl = 1<<heightPix;
 								for (uint8_t h = 0; h < heightPix; ++h)
 								{
-									if (v > lvl)
+									if (v >= lvl)
 									{
 										ch[h] |= mask;
 									}
-//									lvl -= 256/LCD_HEIGHT_SPECIAL_CHARS;
 									lvl >>= 1;
 
 									// Draw XOR'ed pointer at the top of the chart to indicate column
