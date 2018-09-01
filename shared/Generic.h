@@ -4,6 +4,9 @@
 #define CONSTRAIN_HI(amt,high)	((amt)>(high)?(high):(amt))
 #define CONSTRAIN_LO(amt,low)	((amt)<(low)?(low):(amt))
 
+#define BIT_SET_ARRAY(arr,bit)  (arr[bit>>8] |= 1u<<(bit))
+#define BIT_CLR_ARRAY(arr,bit)  (arr[bit>>8] &= ~(1u<<(bit)))
+
 #ifdef LOCAL_DEBUG
 #define Sprint(a)   (Serial.print(a))			// macro as substitute for print, enable if no print wanted
 #define Sprintln(a) (Serial.println(a))
@@ -13,6 +16,8 @@
 #define Sprintln(a)
 #define Sflush()
 #endif
+
+#define NRF24_MAX_CHANNEL (125)
 
 const char *pcPaLevelNames[]  = { "MIN", "LOW", "HIGH", "MAX" };
 const char *pcDataRateNames[] = { "1MBPS", "2MBPS" , "250KBPS"};
