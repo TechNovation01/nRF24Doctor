@@ -1085,10 +1085,7 @@ void menuPage(uint8_t param)
 									lvl >>= 1;
 
 									// Draw XOR'ed pointer at the top of the chart to indicate column
-									if ( (h == 0) and ((b == (iRf24ChannelScanColDisplayed-1)) or (b == (iRf24ChannelScanColDisplayed+1))))
-									{
-										ch[h] ^= mask;
-									} else if ((h <= 1) and (b == iRf24ChannelScanColDisplayed))
+									if ((0 == h) and (b == iRf24ChannelScanColDisplayed))
 									{
 										ch[h] ^= mask;
 									}
