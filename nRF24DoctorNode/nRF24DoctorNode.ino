@@ -1053,9 +1053,16 @@ void menuPage(uint8_t param)
 						print_LCD_line(buf, 0, 4+LCD_NUM_SPECIAL_CHARS);
 
 						// Calculate nRF channel indicated by pointer
-						const uint8_t ch = iRf24ChannelScanStart+((iRf24ChannelScanStop-iRf24ChannelScanStart)*iRf24ChannelScanColDisplayed+(LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS/2))/(LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS-1);
-						snprintf_P(buf, sizeof(buf), PSTR("CH%" PRIu8 "  2.%03" PRIu16 "GHz"), ch, 400+ch );
+						const uint8_t chan = iRf24ChannelScanStart+((iRf24ChannelScanStop-iRf24ChannelScanStart)*iRf24ChannelScanColDisplayed+(LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS/2))/(LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS-1);
+						snprintf_P(buf, sizeof(buf), PSTR("CH%-03" PRIu8 " 2.%03" PRIu16 "G"), chan, 400+chan );
 						print_LCD_line(buf, 1, 0);
+						// Show wifi channel
+						const uint8_t wifi = (chan-5)/5;
+						if ((wifi > 0) and (wifi <= 13))
+						{
+							snprintf_P(buf, sizeof(buf), PSTR("W%-2" PRIu8), wifi );
+							print_LCD_line(buf, 1, LCD_COLS-3);
+						}
 
 						uint8_t b = 0;
 						for (uint8_t i = 0; i < LCD_NUM_SPECIAL_CHARS; ++i)
