@@ -966,12 +966,15 @@ void menuPage(uint8_t param)
 		char buf[LCD_COLS+1];
 		bool exit = LCDML.BT_checkAny(); // check if any button is pressed (enter, up, down, left, right)
 
+		// Not all pages require GW connection to be active
+		const bool gwRequired = not ( (page(param) == PAGE_SLEEPPOWER) or (page(param) == PAGE_SCANNER) );
+
 		if (transportHwError)
 		{
 			print_LCD_line("Radio init error",  0, 0);
 			print_LCD_line("Replace radio",     1, 0);
 		}
-		else if (not isTransportReady())
+		else if (gwRequired and not isTransportReady())
 		{
 			print_LCD_line("Search Gateway..",  0, 0);
 		}
