@@ -17,7 +17,10 @@
 #define Sflush()
 #endif
 
-#define NRF24_MAX_CHANNEL (125)
+#define NRF24_MAX_CHANNEL       (125)
+
+#define CHILD_ID_COUNTER        (0)
+#define CHILD_ID_UPDATE_GATEWAY (1)
 
 const char *pcPaLevelNames[]  = { "MIN", "LOW", "HIGH", "MAX" };
 const char *pcDataRateNames[] = { "1MBPS", "2MBPS" , "250KBPS"};

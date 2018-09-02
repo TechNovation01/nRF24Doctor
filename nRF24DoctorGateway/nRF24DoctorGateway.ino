@@ -99,13 +99,11 @@
 
 static Bounce buttonRestoreDefaults = Bounce(); 
 
-#define CHILD_ID_UPDATE_GATEWAY 	(1)
-#define CHILD_ID_CH_SCAN			(2)
 void before()
 {
 	// Load radio settings from eeprom
 	loadEeprom();
-	logRadioSettings(1);
+	logRadioSettings();
 }
 
 void setup()
@@ -123,7 +121,7 @@ void loop()
 	if ((nowMs - lastLogTimeMs) > DELAY_BETWEEN_RADIO_SETTINGS_PRINT_MS)
 	{
 		lastLogTimeMs = nowMs;
-		logRadioSettings(1);
+		logRadioSettings();
 	}
 
 	buttonRestoreDefaults.update();
@@ -151,16 +149,4 @@ void receive( const MyMessage &message )
 		reset();
 	}
 
-	if (message.type == V_CUSTOM && message.sensor == CHILD_ID_CH_SCAN)
-	{
-		Sprintln(F("Received new Channel Scan Results"));
-		logRadioSettings(0);
-		deserializeChScanResults( message );
-
-		Sprint(F("\t MsgTotal:"));Sprint(iMsgTotal);
-		Sprint(F("\t MsgFailed:"));Sprint(iMsgFailed);
-		Sprint(F("\t MsgNack:"));Sprint(iMsgNack);
-		Sprint(F("\t MsgWithArc:"));Sprintln(iNrOfMsgWithArc);
-		
-	}
 }
