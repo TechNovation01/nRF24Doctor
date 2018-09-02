@@ -555,7 +555,7 @@ void statemachine()
 			if (not bChannelScanner)
 			{
 				// Requested to stop scanner. Restore channel.
-				RF24_setChannel(iRf24Channel);
+				RF24_setChannel(loadState(EEPROM_CHANNEL));
 				currState = STATE_IDLE;
 				break;
 			}
