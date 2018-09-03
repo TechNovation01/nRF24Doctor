@@ -110,16 +110,16 @@ LCDML_add 		  (10 , LCDML_0_7       , 4                        , "Back         <
 LCDML_add         (11 , LCDML_0         , 8                        , "Settings     >"  , NULL);
 LCDML_add         (12 , LCDML_0_8       , 1                        , "Radio        >"  , NULL);
 LCDML_addAdvanced (13 , LCDML_0_8_1     , 1    , NULL              , ""                , menuCfgChannel     , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (14 , LCDML_0_8_1     , 2    , NULL              , ""                , menuCfgGwNode      , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (15 , LCDML_0_8_1     , 3    , NULL              , ""                , menuCfgGwPa        , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (16 , LCDML_0_8_1     , 4    , NULL              , ""                , menuCfgNodePa      , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (17 , LCDML_0_8_1     , 5    , NULL              , ""                , menuCfgRate        , 0                , _LCDML_TYPE_dynParam);
-LCDML_add         (18 , LCDML_0_8_1     , 6                        , "Back         <"  , menuBack);
-LCDML_add         (19 , LCDML_0_8       , 2                        , "Doctor       >"  , NULL);
-LCDML_addAdvanced (20 , LCDML_0_8_2     , 1    , NULL              , ""  			   , menuCfgPayload     , 0                , _LCDML_TYPE_dynParam);
-LCDML_addAdvanced (21 , LCDML_0_8_2     , 2    , NULL              , ""  			   , menuCfgMsgRate     , 0                , _LCDML_TYPE_dynParam);
-LCDML_add         (22 , LCDML_0_8_2     , 3                        , "Reset buff   x"  , menuResetBuf);
-LCDML_add         (23 , LCDML_0_8_2     , 4                        , "Back         <"  , menuBack);
+LCDML_addAdvanced (14 , LCDML_0_8_1     , 2    , NULL              , ""                , menuCfgGwPa        , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (15 , LCDML_0_8_1     , 3    , NULL              , ""                , menuCfgNodePa      , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (16 , LCDML_0_8_1     , 4    , NULL              , ""                , menuCfgRate        , 0                , _LCDML_TYPE_dynParam);
+LCDML_add         (17 , LCDML_0_8_1     , 5                        , "Back         <"  , menuBack);
+LCDML_add         (18 , LCDML_0_8       , 2                        , "Doctor       >"  , NULL);
+LCDML_addAdvanced (19 , LCDML_0_8_2     , 1    , NULL              , ""  			   , menuCfgPayload     , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (20 , LCDML_0_8_2     , 2    , NULL              , ""  			   , menuCfgMsgRate     , 0                , _LCDML_TYPE_dynParam);
+LCDML_addAdvanced (21 , LCDML_0_8_2     , 3    , NULL              , ""                , menuCfgDstNode     , 0                , _LCDML_TYPE_dynParam);
+LCDML_add         (22 , LCDML_0_8_2     , 4                        , "Reset buff   x"  , menuResetBuf);
+LCDML_add         (23 , LCDML_0_8_2     , 5                        , "Back         <"  , menuBack);
 LCDML_add         (24 , LCDML_0_8       , 3                        , "Eeprom       >"  , NULL);
 LCDML_add         (25 , LCDML_0_8_3     , 1                        , "Save node    x"  , menuSaveNodeEeprom);
 LCDML_add         (26 , LCDML_0_8_3     , 2                        , "Save node&gw x"  , menuSaveNodeAndGwEeprom);
@@ -1247,7 +1247,7 @@ void menuCfgChannel(uint8_t line)
 	lcd.print(buf); 
 }
 
-void menuCfgGwNode(uint8_t line)
+void menuCfgDstNode(uint8_t line)
 { 
 	if (line == LCDML.MENU_getCursorPos()) 
 	{
@@ -1255,7 +1255,7 @@ void menuCfgGwNode(uint8_t line)
 	} 
 
 	char buf[LCD_COLS+1];
-	snprintf_P(buf, sizeof(buf), PSTR("GW Node   %3d"), iDestinationNode);
+	snprintf_P(buf, sizeof(buf), PSTR("Dest Node %3d"), iDestinationNode);
 
 	// use the line from function parameters
 	lcd.setCursor(1, line);
