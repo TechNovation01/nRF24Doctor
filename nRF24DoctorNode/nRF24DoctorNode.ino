@@ -209,7 +209,6 @@ volatile boolean bAdcDone;
 
 //**** Remote Gateway Update ****
 //uint8_t iRetryGateway 	= 0;
-bool bUpdateGateway = false;
 uint8_t updateGatewayAttemptsRemaining;
 const uint8_t updateGatewayNumAttempts = 10;
 
@@ -227,7 +226,6 @@ static uint8_t iRf24ChannelScanCurrent = 0;
 static uint8_t iRf24ChannelScanColDisplayed = LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS/2;
 #define CHANNEL_SCAN_BUCKET_MAX_VAL (255)
 static uint8_t channelScanBuckets[LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS];
-static bool bChannelScanner = false;
 #define SCANNEL_SCAN_MEASURE_TIME_US (1000)
 
 /*****************************************************************************/
@@ -411,42 +409,74 @@ void loop()
 
 enum state {	STATE_IDLE,
 				// Regular measurement states
-				STATE_TX, STATE_RX, STATE_PROCESS_DATA, STATE_SLEEP,								
+				STATE_PINGPONG, STATE_TX, STATE_RX,
+				STATE_GO_SLEEP, STATE_SLEEPING,								
 				// Channel scanning Mode state
 				STATE_CH_SCAN, STATE_CH_SCAN_RESTART, STATE_CH_SCAN_MEASURE, STATE_CH_SCAN_WAIT,
 				// Gateway update states
-				STATE_START_GW_UPDATE, STATE_TX_GW_UPDATE, STATE_FAILED_GW_UPDATE,
+				STATE_START_GW_UPDATE, STATE_TX_GW_UPDATE
 };
 static state currState = STATE_IDLE;
 
+enum mode {	MODE_PINGPONG, MODE_DEFAULT = MODE_PINGPONG,
+			MODE_SLEEP, MODE_SCANNER, MODE_UPDATEGW
+};
+static mode currMode = MODE_DEFAULT;
+
+
 void statemachine()
 {
-	static unsigned long timestamp = 0;	// reused inbetween some states
-
-	unsigned long iSetMsgDelay = (1000000L/iSetMsgRate);
+	static unsigned long timestamp;	// reused between some states
 
 	switch (currState)
 	{
 		case STATE_IDLE:
-			if (bUpdateGateway)
+			switch(currMode)
 			{
-				// Start of gateway update
-				currState = STATE_START_GW_UPDATE;
+				case MODE_UPDATEGW:
+					currState = STATE_START_GW_UPDATE;
+					break;
+				case MODE_SCANNER:
+					currState = STATE_CH_SCAN;
+					break;
+				case MODE_SLEEP:
+					currState = STATE_GO_SLEEP;
+					break;
+				case MODE_PINGPONG:
+					currState = STATE_PINGPONG;
+					break;
+				default:
+					break;
 			}
-			else if (bChannelScanner)
-			{
-				// Start of channel scanner
-				currState = STATE_CH_SCAN;
-			}
-			else if (isTransportReady())
-			{
-				// Start of next measurement round
-				if ((micros() - timestamp) >= iSetMsgDelay){currState = STATE_TX;}	//Message Rate limiter
-			}
+			break;
+
+
+		case STATE_PINGPONG:
+			timestamp = micros();
+			currState = STATE_TX;
 			break;
 
 		case STATE_TX:
 			{
+				if (currMode != MODE_PINGPONG)
+				{
+					currState = STATE_IDLE;
+					break;
+				}
+
+				if (not isTransportReady())
+				{
+					// Wait for transport ready (uplink to GW) before trasnmitting.
+					break;
+				}
+
+				const unsigned long iSetMsgDelay = (1000000L/iSetMsgRate);
+				if ((micros() - timestamp) < iSetMsgDelay)
+				{
+					// Message Rate limiter time not elapsed yet.
+					break;
+				}
+
 				// Transmit Current Measurement - Trigger measurement on interrupt
 				EIFR |= 0x01;					//Clear interrupt flag to prevent an immediate trigger
 				attachPCINT(digitalPinToPinChangeInterrupt(MY_RF24_CE_PIN), ISR_TransmitTriggerADC,RISING);
@@ -468,39 +498,50 @@ void statemachine()
 			break;
 
 		case STATE_RX:
-				MY_RF24_startListening();	//Make sure I'm in RX mode
-				ReceiveCurrent_uA 	= uAperBit1*GetAvgADCBits(iNrCurrentMeasurements);
-				//MY_RF24_stopListening();	//I will automatically get out of RX mode when applicable
-				//	Sprint(F("TransmitCurrent_uA:"));Sprintln(TransmitCurrent_uA);
-				//	Sprint(F("ReceiveCurrent_uA:"));Sprintln(ReceiveCurrent_uA);
-				currState = STATE_PROCESS_DATA;
-			break;
-
-		case STATE_PROCESS_DATA:
+			MY_RF24_startListening();	//Make sure I'm in RX mode
+			ReceiveCurrent_uA 	= uAperBit1*GetAvgADCBits(iNrCurrentMeasurements);
+			//MY_RF24_stopListening();	//I will automatically get out of RX mode when applicable
+			//	Sprint(F("TransmitCurrent_uA:"));Sprintln(TransmitCurrent_uA);
+			//	Sprint(F("ReceiveCurrent_uA:"));Sprintln(ReceiveCurrent_uA);
 			//Calculate Mean & Max Values for display purposes
 			getMeanAndMaxFromIntArray(&iArcCntAvg, &iArcCntMax, iArrayArcCnt, iNrArcCnt);
 			getMeanAndMaxFromArray(&iMeanDelayFirstHop_ms,&iMaxDelayFirstHop_ms,lTimeDelayBuffer_FirstHop_us,iNrTimeDelays);
 			getMeanAndMaxFromArray(&iMeanDelayDestination_ms,&iMaxDelayDestination_ms,lTimeDelayBuffer_Destination_us,iNrTimeDelays);
-			
-			currState = STATE_IDLE;
+			currState = STATE_TX;
 			break;
 
-		case STATE_SLEEP:
-		{
+
+
+		case STATE_GO_SLEEP:
 			//Sleep Current Measurement
 			transportDisable();
+			currState = STATE_SLEEPING;
+			break;
+
+		case STATE_SLEEPING:
+		{
+			if (currMode != MODE_SLEEP)
+			{
+				transportStandBy();
+				currState = STATE_IDLE;
+				break;
+			}
+
 			delay_with_update(20);									//Gate charge time and settle time, don't use wait as it will prevent the radio from sleep
 			float SleepCurrent_uA_intermediate = uAperBit1*GetAvgADCBits(iNrCurrentMeasurements);
-			if (SleepCurrent_uA_intermediate < 1500){
+			if (SleepCurrent_uA_intermediate < 1500)
+			{
 				//Set Higher Sensitivity: uAperBit2
 				digitalWrite(MOSFET_2P2OHM_PIN, LOW);
 				digitalWrite(MOSFET_100OHM_PIN, HIGH);
 				delay_with_update(400);								//worst case settle time to charge through higher impedance
 				SleepCurrent_uA_intermediate = uAperBit2*GetAvgADCBits(iNrCurrentMeasurements);
+			} else {
+				SleepCurrent_uA = SleepCurrent_uA_intermediate;
 			}
-			else {SleepCurrent_uA = SleepCurrent_uA_intermediate;}
 
-			if (SleepCurrent_uA_intermediate < 15){
+			if (SleepCurrent_uA_intermediate < 15)
+			{
 				//Set Higher Sensitivity: uAperBit3
 				digitalWrite(MOSFET_2P2OHM_PIN, LOW);
 				digitalWrite(MOSFET_100OHM_PIN, LOW);
@@ -508,26 +549,28 @@ void statemachine()
 				const unsigned long lTimeOut_InitCurrent_ms = 6000;
 				const unsigned long lTimeOut_Settled_SleepCurrent_ms = 30000;
 				unsigned long ldT  = Time_to_reach_InitCurrent_uA(Init_Meas_SleepCurrent_uA, lTimeOut_InitCurrent_ms);
-				if (ldT < lTimeOut_InitCurrent_ms){
-					float fTarget_uA_per_sec = (0.4/(float(ldT)/1000))/20;	//Slew rate to which it should be reduced before we consider it settled
+				if (ldT < lTimeOut_InitCurrent_ms)
+				{
+					// Slew rate to which it should be reduced before we consider it settled
+					float fTarget_uA_per_sec = (0.4/(float(ldT)/1000))/20;
 					SettledSleepCurrent_uA_reached(fTarget_uA_per_sec, lTimeOut_Settled_SleepCurrent_ms);
 					SleepCurrent_uA = uAperBit3*GetAvgADCBits(iNrCurrentMeasurements);	//Even if SettledSleepCurrent_uA_reached has timed out it should have settled by now
-				}
-				else{		//Radio Cap > 1000uF - this will take too long....
+				} else {
+					// Radio Cap > 1000uF - this will take too long....
 					SleepCurrent_uA = CurrentValueErrCap;
 				}
+			} else {
+				SleepCurrent_uA = SleepCurrent_uA_intermediate;
 			}
-			else {SleepCurrent_uA = SleepCurrent_uA_intermediate;}
 //			Sprint(F("SleepCurrent_uA:"));Sprintln(SleepCurrent_uA);
 			
 			//Restore standby power state
 			digitalWrite(MOSFET_2P2OHM_PIN, HIGH);	//Enable 2.2Ohm
 			digitalWrite(MOSFET_100OHM_PIN, LOW);
-			transportStandBy();
-
-			currState = STATE_IDLE;
 			break;		
 		}
+
+
 
 		case STATE_CH_SCAN:
 			// Clear all buckets to start all over
@@ -552,7 +595,7 @@ void statemachine()
 			break;
 
 		case STATE_CH_SCAN_WAIT:
-			if (not bChannelScanner)
+			if (currMode != MODE_SCANNER)
 			{
 				// Requested to stop scanner. Restore channel.
 				RF24_setChannel(loadState(EEPROM_CHANNEL));
@@ -589,6 +632,8 @@ void statemachine()
 			currState = STATE_CH_SCAN_MEASURE;
 			break;
 
+
+
     	case STATE_START_GW_UPDATE:
 			updateGatewayAttemptsRemaining = updateGatewayNumAttempts;
 			currState = STATE_TX_GW_UPDATE;
@@ -614,14 +659,10 @@ void statemachine()
 			else
 			{
 				// Retry attempts exhausted. Give up.
-				currState = STATE_FAILED_GW_UPDATE;
+				// Signals the UI that GW update failed. On next button/encoder change => return to prev menu
+				currMode = MODE_DEFAULT;
+				currState = STATE_IDLE;
 			}
-			break;
-
-		case STATE_FAILED_GW_UPDATE:
-			// Signals the UI that GW update failed. On next button/encoder change => return to prev menu
-			bUpdateGateway = false;
-			currState = STATE_IDLE;
 			break;
 
 		default:
@@ -1071,7 +1112,7 @@ void menuPage(uint8_t param)
 
 				case PAGE_SLEEPPOWER:
 					{
-						currState = STATE_SLEEP;
+						currMode = MODE_SLEEP;
 						char buf1[LCD_COLS+1];
 						snprintf_P(buf, sizeof(buf), PSTR("Sleep %s"), printBufCurrent(buf1,sizeof(buf1), SleepCurrent_uA) );
 						print_LCD_line(buf, 0, 0);
@@ -1082,8 +1123,7 @@ void menuPage(uint8_t param)
 					{
 						// Scanner only exits on button press, as rotation is used to navigate channels.
 						exit = LCDML.BT_checkEnter();
-
-						bChannelScanner = not exit;
+						currMode = MODE_SCANNER;
 
 						// Update position of pointer when encoder is rotated
 						if (LCDML.BT_checkUp())
@@ -1135,6 +1175,8 @@ void menuPage(uint8_t param)
 			LCDML.FUNC_goBackToMenu();  // leave this function
 			// Restore special characters if they got overwritten
 			LCD_SetScrollbarChars();
+			// Revert to default mode
+			currMode = MODE_DEFAULT;
 		}
 	} 
 }
@@ -1342,18 +1384,18 @@ void menuSaveNodeAndGwEeprom(__attribute__((unused)) uint8_t param)
 	if (LCDML.FUNC_setup())
 	{
 		// Trigger the gateway update sequence
-		bUpdateGateway = true;
+		currMode = MODE_UPDATEGW;
 		LCD_clear();
 		LCDML.FUNC_setLoopInterval(100);
 	}
 
 	if (LCDML.FUNC_loop())
 	{
-		static bool prevUpdateGateway = true;
-		if (not bUpdateGateway)
+		static mode prevMode = MODE_DEFAULT;
+		if (MODE_UPDATEGW != currMode)
 		{
 			// Gateway update finished with error
-			if (prevUpdateGateway != bUpdateGateway)
+			if (prevMode != currMode)
 			{
 				// Print message only once
 				print_LCD_line(F("Failed"), 0, 0);
@@ -1363,7 +1405,7 @@ void menuSaveNodeAndGwEeprom(__attribute__((unused)) uint8_t param)
 				LCDML.FUNC_goBackToMenu();  // leave this function
 			}
 		}
-		prevUpdateGateway = bUpdateGateway;
+		prevMode = currMode;
 	} 
 }
 
