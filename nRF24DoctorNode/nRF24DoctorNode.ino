@@ -184,16 +184,16 @@ uint16_t iMaxDelayDestination_ms = 0;
 //**** Current Measurement ****
 #include <PinChangeInterrupt.h>					// for Pin Change Interrupt      Download: https://github.com/NicoHood/PinChangeInterrupt
 const uint8_t iNrCurrentMeasurements 	= 60;	//Nr of measurements for averaging current. <64 to prevent risk of overflow of iAdcSum
+const unsigned long sleepCurrentSettleTimeUs = 400000; //worst case settle time to charge through higher impedance
 const float r1_ohm    = 2.2;
 const float r2_ohm    = 100.0;
 const float r3_ohm    = 10000.0;
 const float Vref_volt = 1.1;
-const float uAperBit1 = ((Vref_volt/1024.0)/r1_ohm)*1.0e6;
-const float uAperBit2 = ((Vref_volt/1024.0)/r2_ohm)*1.0e6;
-const float uAperBit3 = ((Vref_volt/1024.0)/r3_ohm)*1.0e6;
+const float uAperBit_large = ((Vref_volt/1024.0)/r1_ohm)*1.0e6;
+const float uAperBit_med   = ((Vref_volt/1024.0)/r2_ohm)*1.0e6;
+const float uAperBit_small = ((Vref_volt/1024.0)/r3_ohm)*1.0e6;
 
-const float CurrentValueErrCap = -2.0;					// Will show 'Err cap' on display
-const float CurrentValueWait   = -1.0;					// Will show 'WAIT' on display
+const float CurrentValueWait   = 0.0;					// Will show 'WAIT' on display
 const float CurrentValueErr    = 300000.0;				// Will show 'Err' on display
 
 float SleepCurrent_uA 	 	= CurrentValueWait;
@@ -227,6 +227,18 @@ static uint8_t iRf24ChannelScanColDisplayed = LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SP
 #define CHANNEL_SCAN_BUCKET_MAX_VAL (255)
 static uint8_t channelScanBuckets[LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS];
 #define SCANNEL_SCAN_MEASURE_TIME_US (1000)
+
+
+
+#define CURRENT_RANGE_LARGE 0b10
+#define CURRENT_RANGE_MED   0b01
+#define CURRENT_RANGE_SMALL 0b00
+
+void setCurrentRange( const uint8_t range )
+{
+	digitalWrite(MOSFET_2P2OHM_PIN, range & 0b10 );
+	digitalWrite(MOSFET_100OHM_PIN, range & 0b01 );
+}
 
 /*****************************************************************************/
 /******************************* ENCODER & BUTTON ****************************/
@@ -348,9 +360,11 @@ void before() {						//Initialization before the MySensors library starts up
 	pinMode(LED_PIN, OUTPUT);
 	digitalWrite(LED_PIN,LOW);
 #endif
+
 	pinMode(MOSFET_2P2OHM_PIN,OUTPUT);
 	pinMode(MOSFET_100OHM_PIN,OUTPUT);
-	digitalWrite(MOSFET_2P2OHM_PIN,HIGH);
+	setCurrentRange( CURRENT_RANGE_LARGE );
+
 
 	//**** ADC SETUP ****
 	ADCSRA =  bit (ADEN);                      				// turn ADC on
@@ -410,7 +424,9 @@ void loop()
 enum state {	STATE_IDLE,
 				// Regular measurement states
 				STATE_PINGPONG, STATE_TX, STATE_RX,
-				STATE_GO_SLEEP, STATE_SLEEPING,								
+				// Sleep current measurement states
+				STATE_GO_SLEEP, STATE_SLEEP_RANGE_LARGE,
+				STATE_SLEEP_RANGE_MED, STATE_SLEEP_RANGE_SMALL, STATE_SLEEP_FINISH,
 				// Channel scanning Mode state
 				STATE_CH_SCAN, STATE_CH_SCAN_RESTART, STATE_CH_SCAN_MEASURE, STATE_CH_SCAN_WAIT,
 				// Gateway update states
@@ -422,7 +438,6 @@ enum mode {	MODE_PINGPONG, MODE_DEFAULT = MODE_PINGPONG,
 			MODE_SLEEP, MODE_SCANNER, MODE_UPDATEGW
 };
 static mode currMode = MODE_DEFAULT;
-
 
 void statemachine()
 {
@@ -487,7 +502,7 @@ void statemachine()
 				timestamp = lTcurTransmit;
 
 				if (bAdcDone) {				//Get TX Current Measurement Data...it should already have finished
-					TransmitCurrent_uA 	= uAperBit1*((float)iAdcSum/(float)(iStopStorageAfterNrAdcSamples-iStartStorageAfterNrAdcSamples+1));
+					TransmitCurrent_uA 	= uAperBit_large*((float)iAdcSum/(float)(iStopStorageAfterNrAdcSamples-iStartStorageAfterNrAdcSamples+1));
 					bAdcDone = false;
 				}				
 				//else{Sprintln(F("BAD ADC TIMING:"));} //Will happen if the node can not find the gateway @ startup - but no problem.
@@ -499,7 +514,7 @@ void statemachine()
 
 		case STATE_RX:
 			MY_RF24_startListening();	//Make sure I'm in RX mode
-			ReceiveCurrent_uA 	= uAperBit1*GetAvgADCBits(iNrCurrentMeasurements);
+			ReceiveCurrent_uA 	= uAperBit_large*GetAvgADCBits(iNrCurrentMeasurements);
 			//MY_RF24_stopListening();	//I will automatically get out of RX mode when applicable
 			//	Sprint(F("TransmitCurrent_uA:"));Sprintln(TransmitCurrent_uA);
 			//	Sprint(F("ReceiveCurrent_uA:"));Sprintln(ReceiveCurrent_uA);
@@ -510,67 +525,72 @@ void statemachine()
 			currState = STATE_TX;
 			break;
 
-
-
 		case STATE_GO_SLEEP:
 			//Sleep Current Measurement
 			transportDisable();
-			currState = STATE_SLEEPING;
+			SleepCurrent_uA = CurrentValueWait;
+			timestamp = micros();
+			currState = STATE_SLEEP_RANGE_LARGE;
 			break;
 
-		case STATE_SLEEPING:
-		{
+		case STATE_SLEEP_RANGE_LARGE:
 			if (currMode != MODE_SLEEP)
 			{
-				transportStandBy();
-				currState = STATE_IDLE;
+				currState = STATE_SLEEP_FINISH;
 				break;
 			}
-
-			delay_with_update(20);									//Gate charge time and settle time, don't use wait as it will prevent the radio from sleep
-			float SleepCurrent_uA_intermediate = uAperBit1*GetAvgADCBits(iNrCurrentMeasurements);
-			if (SleepCurrent_uA_intermediate < 1500)
+			setCurrentRange(CURRENT_RANGE_LARGE);
+			SleepCurrent_uA = uAperBit_large*GetAvgADCBits(iNrCurrentMeasurements);
+			Sprint(F("L")); Sprintln(SleepCurrent_uA); 
+			if ((micros() - timestamp) < sleepCurrentSettleTimeUs )
 			{
-				//Set Higher Sensitivity: uAperBit2
-				digitalWrite(MOSFET_2P2OHM_PIN, LOW);
-				digitalWrite(MOSFET_100OHM_PIN, HIGH);
-				delay_with_update(400);								//worst case settle time to charge through higher impedance
-				SleepCurrent_uA_intermediate = uAperBit2*GetAvgADCBits(iNrCurrentMeasurements);
-			} else {
-				SleepCurrent_uA = SleepCurrent_uA_intermediate;
+				break;
 			}
-
-			if (SleepCurrent_uA_intermediate < 15)
+			if (SleepCurrent_uA < 1500)
 			{
-				//Set Higher Sensitivity: uAperBit3
-				digitalWrite(MOSFET_2P2OHM_PIN, LOW);
-				digitalWrite(MOSFET_100OHM_PIN, LOW);
-				const float Init_Meas_SleepCurrent_uA = 0.4;
-				const unsigned long lTimeOut_InitCurrent_ms = 6000;
-				const unsigned long lTimeOut_Settled_SleepCurrent_ms = 30000;
-				unsigned long ldT  = Time_to_reach_InitCurrent_uA(Init_Meas_SleepCurrent_uA, lTimeOut_InitCurrent_ms);
-				if (ldT < lTimeOut_InitCurrent_ms)
-				{
-					// Slew rate to which it should be reduced before we consider it settled
-					float fTarget_uA_per_sec = (0.4/(float(ldT)/1000))/20;
-					SettledSleepCurrent_uA_reached(fTarget_uA_per_sec, lTimeOut_Settled_SleepCurrent_ms);
-					SleepCurrent_uA = uAperBit3*GetAvgADCBits(iNrCurrentMeasurements);	//Even if SettledSleepCurrent_uA_reached has timed out it should have settled by now
-				} else {
-					// Radio Cap > 1000uF - this will take too long....
-					SleepCurrent_uA = CurrentValueErrCap;
-				}
-			} else {
-				SleepCurrent_uA = SleepCurrent_uA_intermediate;
+				currState = STATE_SLEEP_RANGE_MED;
+				timestamp = micros();
 			}
-//			Sprint(F("SleepCurrent_uA:"));Sprintln(SleepCurrent_uA);
-			
+			break;
+
+		case STATE_SLEEP_RANGE_MED:
+			if (currMode != MODE_SLEEP)
+			{
+				currState = STATE_SLEEP_FINISH;
+				break;
+			}
+			setCurrentRange(CURRENT_RANGE_MED);
+			SleepCurrent_uA = uAperBit_med*GetAvgADCBits(iNrCurrentMeasurements);
+			Sprint(F("M")); Sprintln(SleepCurrent_uA); 
+			if ((micros() - timestamp) < sleepCurrentSettleTimeUs )
+			{
+				break;
+			}
+			if (SleepCurrent_uA < 15)
+			{
+				currState = STATE_SLEEP_RANGE_SMALL;
+				timestamp = micros();
+			}
+			// Could go back to L, but doesn't really make sense
+			break;
+
+		case STATE_SLEEP_RANGE_SMALL:
+			if (currMode != MODE_SLEEP)
+			{
+				currState = STATE_SLEEP_FINISH;
+				break;
+			}
+			setCurrentRange(CURRENT_RANGE_SMALL);
+			SleepCurrent_uA = uAperBit_small*GetAvgADCBits(iNrCurrentMeasurements);	//Even if SettledSleepCurrent_uA_reached has timed out it should have settled by now
+			Sprint(F("S")); Sprintln(SleepCurrent_uA); 
+			break;
+
+		case STATE_SLEEP_FINISH:
 			//Restore standby power state
-			digitalWrite(MOSFET_2P2OHM_PIN, HIGH);	//Enable 2.2Ohm
-			digitalWrite(MOSFET_100OHM_PIN, LOW);
-			break;		
-		}
-
-
+			setCurrentRange(CURRENT_RANGE_LARGE);
+			transportStandBy();
+			currState = STATE_IDLE;
+			break;
 
 		case STATE_CH_SCAN:
 			// Clear all buckets to start all over
@@ -902,38 +922,6 @@ float GetAvgADCBits(int iNrSamples) {
 	return ((float)iAdcSum/(float)(iNrSamples));
 }
 
-unsigned long Time_to_reach_InitCurrent_uA(float Threshold_current_uA, unsigned long lTimeOut){
-	float Current_uA = 0;
-	unsigned long lTstart = millis();
-	unsigned long ldT = 0;
-	while ((Current_uA < Threshold_current_uA) & (ldT<lTimeOut)){
-		delay_with_update(50);	//don't measure to often as it will load the sleep current too much.
-		Current_uA = uAperBit3*GetAvgADCBits(iNrCurrentMeasurements);
-		ldT = (millis()-lTstart);
-	}
-	return ldT;
-}
-
-bool SettledSleepCurrent_uA_reached(float Threshold_current_uA_per_sec, unsigned long lTimeOut){
-	bool bReached = false;
-	float Current_uA_new = 0;
-	float Current_uA_prev = uAperBit3*GetAvgADCBits(iNrCurrentMeasurements);
-	float Current_uA_per_sec = 0;
-	unsigned long lTstart = millis();
-	int n=0;
-	unsigned long lTimeScaler = constrain(100/Threshold_current_uA_per_sec,100,15000);//don't measure to often as it will load the sleep current too much.
-	while ((n<2) & ((millis()-lTstart)<lTimeOut)){
-		delay_with_update(lTimeScaler);
-		Current_uA_new 		= uAperBit3*GetAvgADCBits(iNrCurrentMeasurements);
-		Current_uA_per_sec 	= (Current_uA_new - Current_uA_prev)/(float(lTimeScaler)/1000);
-		Current_uA_prev = Current_uA_new;
-		if (Current_uA_per_sec < Threshold_current_uA_per_sec){n++;}
-		else{n=0;}
-	}
-	if (Current_uA_per_sec < Threshold_current_uA_per_sec){bReached = true;}
-	return bReached;
-}
-
 /*****************************************************************/
 /************************* LCD FUNCTIONS *************************/
 /*****************************************************************/
@@ -967,11 +955,7 @@ void LCD_SetScrollbarChars()
 /*****************************************************************/
 char* printBufCurrent(char *buf, int size, float curr)
 {
-	if (CurrentValueErrCap == curr)
-	{
-		snprintf_P(buf, size, PSTR("Err cap"));
-	}
-	else if (CurrentValueWait == curr)
+	if (CurrentValueWait == curr)
 	{
 		snprintf_P(buf, size, PSTR("Wait"));
 	}
