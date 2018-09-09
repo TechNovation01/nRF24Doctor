@@ -46,3 +46,5 @@ uint8_t rf24DataRateConstrain( const uint8_t rate )
 {
 	return CONSTRAIN_HI( rate, COUNT_OF(pcDataRateNames)-1 );
 }
+
+enum currentRange { CURRENT_RANGE_SMALL = 0, CURRENT_RANGE_MED = 1, CURRENT_RANGE_LARGE = 2 };

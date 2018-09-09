@@ -189,9 +189,13 @@ const float r1_ohm    = 2.2;
 const float r2_ohm    = 100.0;
 const float r3_ohm    = 10000.0;
 const float Vref_volt = 1.1;
-const float uAperBit_large = ((Vref_volt/1024.0)/r1_ohm)*1.0e6;
-const float uAperBit_med   = ((Vref_volt/1024.0)/r2_ohm)*1.0e6;
-const float uAperBit_small = ((Vref_volt/1024.0)/r3_ohm)*1.0e6;
+
+// Scaling factors for ADC current conversion. Order follows currentRange enum.
+const float uAperBit[] = {
+	((Vref_volt/1024.0)/r3_ohm)*1.0e6,	// CURRENT_RANGE_SMALL
+	((Vref_volt/1024.0)/r2_ohm)*1.0e6,	// CURRENT_RANGE_MED
+	((Vref_volt/1024.0)/r1_ohm)*1.0e6	// CURRENT_RANGE_LARGE
+};
 
 const float CurrentValueWait   = 0.0;					// Will show 'WAIT' on display
 const float CurrentValueErr    = 300000.0;				// Will show 'Err' on display
@@ -199,6 +203,8 @@ const float CurrentValueErr    = 300000.0;				// Will show 'Err' on display
 float SleepCurrent_uA 	 	= CurrentValueWait;
 float TransmitCurrent_uA 	= 0;
 float ReceiveCurrent_uA  	= 0;
+
+static currentRange actualCurrentRange;	// Track actual current measurement range
 
 //**** Configure ADC ****
 volatile uint8_t iStartStorageAfterNrAdcSamples  = 7; 	//Note this depends on the set ADC prescaler (currently: 16x prescaler)
@@ -228,16 +234,24 @@ static uint8_t iRf24ChannelScanColDisplayed = LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SP
 static uint8_t channelScanBuckets[LCD_WIDTH_SPECIAL_CHARS*LCD_NUM_SPECIAL_CHARS];
 #define SCANNEL_SCAN_MEASURE_TIME_US (1000)
 
-
-
-#define CURRENT_RANGE_LARGE 0b10
-#define CURRENT_RANGE_MED   0b01
-#define CURRENT_RANGE_SMALL 0b00
-
-void setCurrentRange( const uint8_t range )
+void setCurrentRange( const currentRange range )
 {
-	digitalWrite(MOSFET_2P2OHM_PIN, range & 0b10 );
-	digitalWrite(MOSFET_100OHM_PIN, range & 0b01 );
+	// Default: largest range
+	bool res_2p2ohm = true;
+	bool res_100ohm = false;
+	if (range == CURRENT_RANGE_SMALL)
+	{
+		res_2p2ohm = false;
+	}
+	else if (range == CURRENT_RANGE_MED)
+	{
+		res_2p2ohm = false;
+		res_100ohm = true;
+	}
+	digitalWrite(MOSFET_2P2OHM_PIN, res_2p2ohm );
+	digitalWrite(MOSFET_100OHM_PIN, res_100ohm );
+	// Keep track of current measurement range
+	actualCurrentRange = range;
 }
 
 /*****************************************************************************/
@@ -425,8 +439,7 @@ enum state {	STATE_IDLE,
 				// Regular measurement states
 				STATE_PINGPONG, STATE_TX, STATE_RX,
 				// Sleep current measurement states
-				STATE_GO_SLEEP, STATE_SLEEP_RANGE_LARGE,
-				STATE_SLEEP_RANGE_MED, STATE_SLEEP_RANGE_SMALL, STATE_SLEEP_FINISH,
+				STATE_GO_SLEEP, STATE_SLEEP_SETTLE,	STATE_SLEEP_MEASURE,
 				// Channel scanning Mode state
 				STATE_CH_SCAN, STATE_CH_SCAN_RESTART, STATE_CH_SCAN_MEASURE, STATE_CH_SCAN_WAIT,
 				// Gateway update states
@@ -502,7 +515,7 @@ void statemachine()
 				timestamp = lTcurTransmit;
 
 				if (bAdcDone) {				//Get TX Current Measurement Data...it should already have finished
-					TransmitCurrent_uA 	= uAperBit_large*((float)iAdcSum/(float)(iStopStorageAfterNrAdcSamples-iStartStorageAfterNrAdcSamples+1));
+					TransmitCurrent_uA 	= uAperBit[actualCurrentRange]*((float)iAdcSum/(float)(iStopStorageAfterNrAdcSamples-iStartStorageAfterNrAdcSamples+1));
 					bAdcDone = false;
 				}				
 				//else{Sprintln(F("BAD ADC TIMING:"));} //Will happen if the node can not find the gateway @ startup - but no problem.
@@ -514,7 +527,7 @@ void statemachine()
 
 		case STATE_RX:
 			MY_RF24_startListening();	//Make sure I'm in RX mode
-			ReceiveCurrent_uA 	= uAperBit_large*GetAvgADCBits(iNrCurrentMeasurements);
+			ReceiveCurrent_uA 	= measureCurrent(iNrCurrentMeasurements);
 			//MY_RF24_stopListening();	//I will automatically get out of RX mode when applicable
 			//	Sprint(F("TransmitCurrent_uA:"));Sprintln(TransmitCurrent_uA);
 			//	Sprint(F("ReceiveCurrent_uA:"));Sprintln(ReceiveCurrent_uA);
@@ -526,71 +539,50 @@ void statemachine()
 			break;
 
 		case STATE_GO_SLEEP:
-			//Sleep Current Measurement
+			// Sleep Current Measurement. Start with largest range and scale down when required.
 			transportDisable();
+			setCurrentRange(CURRENT_RANGE_LARGE);
 			SleepCurrent_uA = CurrentValueWait;
 			timestamp = micros();
-			currState = STATE_SLEEP_RANGE_LARGE;
+			currState = STATE_SLEEP_SETTLE;
 			break;
 
-		case STATE_SLEEP_RANGE_LARGE:
+		case STATE_SLEEP_SETTLE:
+			SleepCurrent_uA = measureCurrent(iNrCurrentMeasurements);
+			if ((micros() - timestamp) >= sleepCurrentSettleTimeUs )
+			{
+				currState = STATE_SLEEP_MEASURE;
+			}
+			break;
+
+		case STATE_SLEEP_MEASURE:
+		{
 			if (currMode != MODE_SLEEP)
 			{
-				currState = STATE_SLEEP_FINISH;
+				setCurrentRange(CURRENT_RANGE_LARGE);
+				transportStandBy();
+				currState = STATE_IDLE;
 				break;
 			}
-			setCurrentRange(CURRENT_RANGE_LARGE);
-			SleepCurrent_uA = uAperBit_large*GetAvgADCBits(iNrCurrentMeasurements);
-			Sprint(F("L")); Sprintln(SleepCurrent_uA); 
-			if ((micros() - timestamp) < sleepCurrentSettleTimeUs )
+			SleepCurrent_uA = measureCurrent(iNrCurrentMeasurements);
+
+			// -- Decide to scale down measurement range or to stay here
+			// Out-of-range: Scale down measurement range
+			bool scaleDown	 = SleepCurrent_uA <= 0;
+			// Large-range and sleep current < 1500uA
+			scaleDown		|= ((actualCurrentRange == CURRENT_RANGE_LARGE) and (SleepCurrent_uA <= 1500));
+			// Med-range and sleep current < 15uA
+			scaleDown		|= ((actualCurrentRange == CURRENT_RANGE_MED)   and (SleepCurrent_uA <= 15));
+
+			if (scaleDown and (actualCurrentRange > 0))
 			{
-				break;
-			}
-			if (SleepCurrent_uA < 1500)
-			{
-				currState = STATE_SLEEP_RANGE_MED;
+				// Scale to smaller range still possible. Do it!
+				setCurrentRange(currentRange(int(actualCurrentRange) - 1));
 				timestamp = micros();
+				currState = STATE_SLEEP_SETTLE;
 			}
 			break;
-
-		case STATE_SLEEP_RANGE_MED:
-			if (currMode != MODE_SLEEP)
-			{
-				currState = STATE_SLEEP_FINISH;
-				break;
-			}
-			setCurrentRange(CURRENT_RANGE_MED);
-			SleepCurrent_uA = uAperBit_med*GetAvgADCBits(iNrCurrentMeasurements);
-			Sprint(F("M")); Sprintln(SleepCurrent_uA); 
-			if ((micros() - timestamp) < sleepCurrentSettleTimeUs )
-			{
-				break;
-			}
-			if (SleepCurrent_uA < 15)
-			{
-				currState = STATE_SLEEP_RANGE_SMALL;
-				timestamp = micros();
-			}
-			// Could go back to L, but doesn't really make sense
-			break;
-
-		case STATE_SLEEP_RANGE_SMALL:
-			if (currMode != MODE_SLEEP)
-			{
-				currState = STATE_SLEEP_FINISH;
-				break;
-			}
-			setCurrentRange(CURRENT_RANGE_SMALL);
-			SleepCurrent_uA = uAperBit_small*GetAvgADCBits(iNrCurrentMeasurements);	//Even if SettledSleepCurrent_uA_reached has timed out it should have settled by now
-			Sprint(F("S")); Sprintln(SleepCurrent_uA); 
-			break;
-
-		case STATE_SLEEP_FINISH:
-			//Restore standby power state
-			setCurrentRange(CURRENT_RANGE_LARGE);
-			transportStandBy();
-			currState = STATE_IDLE;
-			break;
+		}
 
 		case STATE_CH_SCAN:
 			// Clear all buckets to start all over
@@ -908,7 +900,7 @@ void getMeanAndMaxFromArray(uint16_t *mean_value, uint16_t *max_value, unsigned 
 	}	
 }
 
-float GetAvgADCBits(int iNrSamples) {
+float measureCurrent(int iNrSamples) {
 	//iNrSamples < 64, else risk of overflowing iAdcSum
 	iStartStorageAfterNrAdcSamples  = 0;
 	iStopStorageAfterNrAdcSamples 	= iNrSamples;
@@ -916,10 +908,16 @@ float GetAvgADCBits(int iNrSamples) {
 	iNrAdcSamplesElapsed	= 0;
 	iAdcSum 				= 0;
 	bAdcDone 				= false;
-	ADCSRA |= bit (ADSC) | bit (ADIE);	  	//start new ADC conversion
-	while (!bAdcDone){delay_with_update(1);};			//Wait until all ADC conversions have completed
+
+	// Start new ADC conversion and wait until all have completed
+	ADCSRA |= bit (ADSC) | bit (ADIE);
+	while (!bAdcDone)
+	{
+		delay_with_update(1);
+	};
 	bAdcDone 				= false;
-	return ((float)iAdcSum/(float)(iNrSamples));
+
+	return uAperBit[actualCurrentRange] * ((float)iAdcSum/(float)(iNrSamples));
 }
 
 /*****************************************************************/
